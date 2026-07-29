@@ -1,0 +1,351 @@
+@page "/projects/{Id:int}"
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject IUserProvisioningService Provisioning
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+
+<PageTitle>@(Project?.Name ?? "Dự án") - CMC TS</PageTitle>
+
+@if (Project is null)
+{
+    <p>Đang tải...</p>
+}
+else
+{
+    <div class="page-head">
+        <div>
+            <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
+            <h1>@Project.Name</h1>
+        </div>
+        @if (CanEdit && !EditMode)
+        {
+            <button type="button" class="btn-primary" @onclick="StartEdit">Chỉnh sửa</button>
+        }
+    </div>
+
+    @if (!EditMode)
+    {
+        <div class="view-grid">
+            <div class="view-field"><span class="label">Trưởng dự án</span><span>@(Project.ProjectLead?.DisplayName ?? "-")</span></div>
+            <div class="view-field"><span class="label">Trạng thái</span><span>@StatusLabel(Project.Status)</span></div>
+            <div class="view-field"><span class="label">Công nghệ liên quan</span>
+                <span>
+                    @if (Project.ProjectTechnologies.Count == 0)
+                    {
+                        <text>-</text>
+                    }
+                    else
+                    {
+                        @string.Join(", ", Project.ProjectTechnologies.Select(pt => pt.Technology.Name))
+                    }
+                </span>
+            </div>
+        </div>
+
+        <h2>Thành viên (@Project.Members.Count)</h2>
+        <ul class="member-view-list">
+            @foreach (var m in Project.Members)
+            {
+                <li>
+                    @m.User.DisplayName <span class="muted">(@m.User.SamAccountName)</span>
+                    @if (m.UserId == Project.ProjectLeadUserId)
+                    {
+                        <span class="chip chip-lead">Trưởng dự án</span>
+                    }
+                </li>
+            }
+        </ul>
+    }
+    else
+    {
+        <div class="field">
+            <label for="name">Tên dự án</label>
+            <input id="name" type="text" @bind="EditName" />
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="fy">Năm tài chính</label>
+                <input id="fy" type="text" @bind="EditFiscalYear" />
+            </div>
+            <div class="field">
+                <label for="bu">Khối kinh doanh</label>
+                <select id="bu" @bind="EditBusinessUnit">
+                    @foreach (var bu in Enum.GetValues<BusinessUnit>())
+                    {
+                        <option value="@bu">@bu</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="field">
+            <label>Công nghệ liên quan</label>
+            <div class="tech-list">
+                @foreach (var t in Technologies)
+                {
+                    <label class="tech-chip">
+                        <input type="checkbox" checked="@EditTechnologyIds.Contains(t.Id)" @onchange="e => ToggleTechnology(t.Id, e.Value)" />
+                        @t.Name
+                    </label>
+                }
+            </div>
+            <div class="add-tech">
+                <input type="text" placeholder="Thêm công nghệ mới..." @bind="NewTechName" />
+                <button type="button" @onclick="AddTechnologyAsync">+ Thêm</button>
+            </div>
+        </div>
+
+        <div class="field">
+            <label>Thành viên tham gia</label>
+            <AdUserPicker OnUserSelected="AddMemberAsync"
+                          IsDisabled="r => EditMembers.Any(m => m.SamAccountName == r.SamAccountName)"
+                          SelectLabel="Thêm vào dự án"
+                          DisabledLabel="Đã thêm" />
+
+            @if (EditMembers.Count > 0)
+            {
+                <ul class="member-list">
+                    @foreach (var m in EditMembers)
+                    {
+                        <li>
+                            <span>@m.DisplayName <span class="muted">(@m.SamAccountName)</span></span>
+                            <button type="button" @onclick="() => RemoveMember(m.UserId)">Xóa</button>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="field">
+            <label for="lead">Trưởng dự án</label>
+            <select id="lead" @bind="EditProjectLeadUserId">
+                <option value="">-- Chưa chọn --</option>
+                @foreach (var m in EditMembers)
+                {
+                    <option value="@m.UserId">@m.DisplayName</option>
+                }
+            </select>
+        </div>
+
+        @if (SaveError is not null)
+        {
+            <div class="error-box">@SaveError</div>
+        }
+
+        <div class="actions">
+            <button type="button" class="btn-primary" @onclick="SaveAsync">Lưu thay đổi</button>
+            <button type="button" class="btn-secondary" @onclick="CancelEdit">Hủy</button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Project? Project { get; set; }
+    private List<Technology> Technologies { get; set; } = new();
+    private bool CanEdit { get; set; }
+    private bool EditMode { get; set; }
+    private int? CurrentUserId { get; set; }
+
+    private string EditName { get; set; } = string.Empty;
+    private string EditFiscalYear { get; set; } = string.Empty;
+    private BusinessUnit EditBusinessUnit { get; set; }
+    private HashSet<int> EditTechnologyIds { get; set; } = new();
+    private List<MemberRow> EditMembers { get; set; } = new();
+    private string EditProjectLeadUserId { get; set; } = string.Empty;
+    private string NewTechName { get; set; } = string.Empty;
+    private string? SaveError { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        CurrentUserId = authState.User.GetUserId();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        Technologies = await db.Technologies.Where(t => t.IsActive).OrderBy(t => t.Name).ToListAsync();
+
+        await ReloadAsync(authState.User);
+    }
+
+    private async Task ReloadAsync(System.Security.Claims.ClaimsPrincipal user)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        Project = await db.Projects
+            .Include(p => p.ProjectLead)
+            .Include(p => p.Members).ThenInclude(m => m.User)
+            .Include(p => p.ProjectTechnologies).ThenInclude(pt => pt.Technology)
+            .SingleOrDefaultAsync(p => p.Id == Id);
+
+        if (Project is null)
+        {
+            return;
+        }
+
+        CanEdit = user.IsAdmin() || (CurrentUserId is not null && Project.ProjectLeadUserId == CurrentUserId);
+    }
+
+    private void StartEdit()
+    {
+        if (Project is null) return;
+
+        EditName = Project.Name;
+        EditFiscalYear = Project.FiscalYear;
+        EditBusinessUnit = Project.BusinessUnit;
+        EditTechnologyIds = Project.ProjectTechnologies.Select(pt => pt.TechnologyId).ToHashSet();
+        EditMembers = Project.Members.Select(m => new MemberRow(m.UserId, m.User.DisplayName, m.User.SamAccountName)).ToList();
+        EditProjectLeadUserId = Project.ProjectLeadUserId?.ToString() ?? string.Empty;
+        SaveError = null;
+        EditMode = true;
+    }
+
+    private void CancelEdit() => EditMode = false;
+
+    private void ToggleTechnology(int id, object? checkedValue)
+    {
+        var isChecked = checkedValue is bool b && b;
+        if (isChecked) EditTechnologyIds.Add(id); else EditTechnologyIds.Remove(id);
+    }
+
+    private async Task AddTechnologyAsync()
+    {
+        var name = NewTechName.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var existing = await db.Technologies.SingleOrDefaultAsync(t => t.Name == name);
+        if (existing is null)
+        {
+            existing = new Technology { Name = name, IsActive = true };
+            db.Technologies.Add(existing);
+            await db.SaveChangesAsync();
+        }
+
+        if (Technologies.All(t => t.Id != existing.Id))
+        {
+            Technologies.Add(existing);
+        }
+        EditTechnologyIds.Add(existing.Id);
+        NewTechName = string.Empty;
+    }
+
+    private async Task AddMemberAsync(AdUserInfo adUser)
+    {
+        var user = await Provisioning.GetOrCreateStubAsync(adUser);
+        if (EditMembers.Any(m => m.UserId == user.Id))
+        {
+            return;
+        }
+        EditMembers.Add(new MemberRow(user.Id, user.DisplayName, user.SamAccountName));
+    }
+
+    private void RemoveMember(int userId)
+    {
+        EditMembers.RemoveAll(m => m.UserId == userId);
+        if (EditProjectLeadUserId == userId.ToString())
+        {
+            EditProjectLeadUserId = string.Empty;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        SaveError = null;
+
+        if (string.IsNullOrWhiteSpace(EditName))
+        {
+            SaveError = "Vui lòng nhập tên dự án.";
+            return;
+        }
+        if (EditMembers.Count == 0)
+        {
+            SaveError = "Dự án cần ít nhất 1 thành viên.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(EditProjectLeadUserId))
+        {
+            SaveError = "Vui lòng chọn Trưởng dự án.";
+            return;
+        }
+        if (CurrentUserId is null)
+        {
+            SaveError = "Không xác định được người dùng hiện tại, vui lòng đăng nhập lại.";
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Projects
+            .Include(p => p.Members)
+            .Include(p => p.ProjectTechnologies)
+            .SingleAsync(p => p.Id == Id);
+
+        var newLeadId = int.Parse(EditProjectLeadUserId);
+
+        LogIfChanged(db, entity.Name, EditName.Trim(), "Name");
+        LogIfChanged(db, entity.FiscalYear, EditFiscalYear.Trim(), "FiscalYear");
+        LogIfChanged(db, entity.BusinessUnit.ToString(), EditBusinessUnit.ToString(), "BusinessUnit");
+        LogIfChanged(db, entity.ProjectLeadUserId?.ToString(), newLeadId.ToString(), "ProjectLeadUserId");
+
+        entity.Name = EditName.Trim();
+        entity.FiscalYear = EditFiscalYear.Trim();
+        entity.BusinessUnit = EditBusinessUnit;
+        entity.ProjectLeadUserId = newLeadId;
+
+        entity.ProjectTechnologies.Clear();
+        foreach (var techId in EditTechnologyIds)
+        {
+            entity.ProjectTechnologies.Add(new ProjectTechnology { TechnologyId = techId });
+        }
+
+        var editMemberIds = EditMembers.Select(m => m.UserId).ToHashSet();
+        foreach (var toRemove in entity.Members.Where(m => !editMemberIds.Contains(m.UserId)).ToList())
+        {
+            entity.Members.Remove(toRemove);
+        }
+        var existingMemberIds = entity.Members.Select(m => m.UserId).ToHashSet();
+        foreach (var m in EditMembers.Where(m => !existingMemberIds.Contains(m.UserId)))
+        {
+            entity.Members.Add(new ProjectMember { UserId = m.UserId, AddedAt = DateTime.UtcNow });
+        }
+
+        await db.SaveChangesAsync();
+
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        await ReloadAsync(authState.User);
+        EditMode = false;
+    }
+
+    private void LogIfChanged(CmcTsDbContext db, string? oldValue, string? newValue, string fieldName)
+    {
+        if (oldValue == newValue)
+        {
+            return;
+        }
+
+        db.AuditLogs.Add(new AuditLog
+        {
+            EntityType = nameof(Project),
+            EntityId = Id,
+            FieldName = fieldName,
+            OldValue = oldValue,
+            NewValue = newValue,
+            ChangedByUserId = CurrentUserId!.Value,
+            ChangedAt = DateTime.UtcNow,
+        });
+    }
+
+    private static string StatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Draft => "Nháp",
+        ProjectStatus.InProgress => "Đang triển khai",
+        ProjectStatus.Completed => "Hoàn thành",
+        _ => status.ToString(),
+    };
+
+    private record MemberRow(int UserId, string DisplayName, string SamAccountName);
+}

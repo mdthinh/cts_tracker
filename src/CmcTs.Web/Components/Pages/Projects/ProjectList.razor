@@ -1,0 +1,70 @@
+@page "/projects"
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject NavigationManager Navigation
+
+<PageTitle>Dự án - CMC TS</PageTitle>
+
+<div class="page-head">
+    <h1>Dự án</h1>
+    <AuthorizeView Roles="@nameof(GlobalRole.Admin)">
+        <a class="btn-primary" href="/projects/new">+ Tạo dự án mới</a>
+    </AuthorizeView>
+</div>
+
+@if (Projects.Count == 0)
+{
+    <p class="hint">Chưa có dự án nào.</p>
+}
+else
+{
+    <table class="proj-table">
+        <thead>
+            <tr>
+                <th>Tên dự án</th>
+                <th>Năm tài chính</th>
+                <th>Khối kinh doanh</th>
+                <th>Trưởng dự án</th>
+                <th>Thành viên</th>
+                <th>Trạng thái</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in Projects)
+            {
+                <tr @onclick="() => GoToDetail(p.Id)">
+                    <td class="proj-name">@p.Name</td>
+                    <td>@p.FiscalYear</td>
+                    <td>@p.BusinessUnit</td>
+                    <td>@(p.ProjectLead?.DisplayName ?? "-")</td>
+                    <td>@p.Members.Count</td>
+                    <td><span class="chip chip-@p.Status">@StatusLabel(p.Status)</span></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Project> Projects { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        Projects = await db.Projects
+            .Include(p => p.ProjectLead)
+            .Include(p => p.Members)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+    }
+
+    private void GoToDetail(int id) => Navigation.NavigateTo($"/projects/{id}");
+
+    private static string StatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Draft => "Nháp",
+        ProjectStatus.InProgress => "Đang triển khai",
+        ProjectStatus.Completed => "Hoàn thành",
+        _ => status.ToString(),
+    };
+}

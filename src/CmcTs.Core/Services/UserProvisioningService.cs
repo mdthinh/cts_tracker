@@ -58,4 +58,29 @@ public class UserProvisioningService : IUserProvisioningService
         await db.SaveChangesAsync(ct);
         return user;
     }
+
+    public async Task<User> GetOrCreateStubAsync(AdUserInfo adUser, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var user = await db.Users.SingleOrDefaultAsync(u => u.SamAccountName == adUser.SamAccountName, ct);
+        if (user is not null)
+        {
+            return user;
+        }
+
+        user = new User
+        {
+            SamAccountName = adUser.SamAccountName,
+            DisplayName = adUser.DisplayName,
+            Email = adUser.Email,
+            Department = adUser.Department,
+            GlobalRole = GlobalRole.Viewer,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.Users.Add(user);
+        await db.SaveChangesAsync(ct);
+        return user;
+    }
 }

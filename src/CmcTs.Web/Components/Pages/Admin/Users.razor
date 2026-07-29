@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = nameof(GlobalRole.Admin))]
 @rendermode InteractiveServer
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
-@inject ILdapService Ldap
+@inject IUserProvisioningService Provisioning
 
 <PageTitle>Quản lý người dùng - CMC TS</PageTitle>
 
@@ -12,34 +12,10 @@
     hoặc bạn chủ động tìm trên AD và thêm vào trước.
 </p>
 
-<section class="ad-search">
-    <input type="text" placeholder="Tìm theo tên hoặc tài khoản AD..." @bind="SearchTerm" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
-    <button type="button" @onclick="SearchAsync" disabled="@IsSearching">Tìm trên AD</button>
-</section>
-
-@if (SearchError is not null)
-{
-    <div class="error-box">@SearchError</div>
-}
-
-@if (SearchResults.Count > 0)
-{
-    <ul class="ad-results">
-        @foreach (var r in SearchResults)
-        {
-            var alreadyAdded = ExistingSamAccounts.Contains(r.SamAccountName);
-            <li>
-                <span>
-                    <strong>@r.DisplayName</strong>
-                    <span class="muted">@r.SamAccountName · @r.Department</span>
-                </span>
-                <button type="button" disabled="@alreadyAdded" @onclick="() => AddUserAsync(r)">
-                    @(alreadyAdded ? "Đã có trong hệ thống" : "Thêm vào hệ thống")
-                </button>
-            </li>
-        }
-    </ul>
-}
+<AdUserPicker OnUserSelected="AddUserAsync"
+              IsDisabled="r => ExistingSamAccounts.Contains(r.SamAccountName)"
+              SelectLabel="Thêm vào hệ thống"
+              DisabledLabel="Đã có trong hệ thống" />
 
 <table class="user-table">
     <thead>
@@ -82,11 +58,6 @@
     private List<User> UserList { get; set; } = new();
     private HashSet<string> ExistingSamAccounts { get; set; } = new();
 
-    private string SearchTerm { get; set; } = string.Empty;
-    private bool IsSearching { get; set; }
-    private string? SearchError { get; set; }
-    private List<AdUserInfo> SearchResults { get; set; } = new();
-
     protected override async Task OnInitializedAsync()
     {
         await ReloadUsersAsync();
@@ -99,59 +70,9 @@
         ExistingSamAccounts = UserList.Select(u => u.SamAccountName).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    private async Task OnSearchKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            await SearchAsync();
-        }
-    }
-
-    private async Task SearchAsync()
-    {
-        SearchError = null;
-        if (string.IsNullOrWhiteSpace(SearchTerm))
-        {
-            SearchResults = new();
-            return;
-        }
-
-        IsSearching = true;
-        try
-        {
-            var results = await Ldap.SearchUsersAsync(SearchTerm);
-            SearchResults = results.ToList();
-        }
-        catch (Exception ex)
-        {
-            SearchError = $"Không tìm được trên AD: {ex.Message}";
-            SearchResults = new();
-        }
-        finally
-        {
-            IsSearching = false;
-        }
-    }
-
     private async Task AddUserAsync(AdUserInfo adUser)
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
-        if (await db.Users.AnyAsync(u => u.SamAccountName == adUser.SamAccountName))
-        {
-            return;
-        }
-
-        db.Users.Add(new User
-        {
-            SamAccountName = adUser.SamAccountName,
-            DisplayName = adUser.DisplayName,
-            Email = adUser.Email,
-            Department = adUser.Department,
-            GlobalRole = GlobalRole.Viewer,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync();
+        await Provisioning.GetOrCreateStubAsync(adUser);
         await ReloadUsersAsync();
     }
 

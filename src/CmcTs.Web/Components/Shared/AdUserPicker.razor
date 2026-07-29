@@ -1,0 +1,84 @@
+@inject ILdapService Ldap
+
+<div class="ad-picker">
+    <div class="ad-search">
+        <input type="text" placeholder="@Placeholder" @bind="SearchTerm" @bind:event="oninput" @onkeydown="OnKeyDown" />
+        <button type="button" @onclick="SearchAsync" disabled="@IsSearching">Tìm trên AD</button>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="error-box">@Error</div>
+    }
+
+    @if (Results.Count > 0)
+    {
+        <ul class="ad-results">
+            @foreach (var r in Results)
+            {
+                var disabled = IsDisabled?.Invoke(r) ?? false;
+                <li>
+                    <span>
+                        <strong>@r.DisplayName</strong>
+                        <span class="muted">@r.SamAccountName · @r.Department</span>
+                    </span>
+                    <button type="button" disabled="@disabled" @onclick="() => SelectAsync(r)">
+                        @(disabled ? DisabledLabel : SelectLabel)
+                    </button>
+                </li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter] public string Placeholder { get; set; } = "Tìm theo tên hoặc tài khoản AD...";
+    [Parameter] public string SelectLabel { get; set; } = "Thêm";
+    [Parameter] public string DisabledLabel { get; set; } = "Đã thêm";
+    [Parameter] public Func<AdUserInfo, bool>? IsDisabled { get; set; }
+    [Parameter] public EventCallback<AdUserInfo> OnUserSelected { get; set; }
+
+    private string SearchTerm { get; set; } = string.Empty;
+    private bool IsSearching { get; set; }
+    private string? Error { get; set; }
+    private List<AdUserInfo> Results { get; set; } = new();
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        Error = null;
+        if (string.IsNullOrWhiteSpace(SearchTerm))
+        {
+            Results = new();
+            return;
+        }
+
+        IsSearching = true;
+        try
+        {
+            var found = await Ldap.SearchUsersAsync(SearchTerm);
+            Results = found.ToList();
+        }
+        catch (Exception ex)
+        {
+            Error = $"Không tìm được trên AD: {ex.Message}";
+            Results = new();
+        }
+        finally
+        {
+            IsSearching = false;
+        }
+    }
+
+    private async Task SelectAsync(AdUserInfo r)
+    {
+        await OnUserSelected.InvokeAsync(r);
+    }
+}

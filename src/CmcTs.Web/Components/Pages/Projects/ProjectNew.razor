@@ -1,0 +1,208 @@
+@page "/projects/new"
+@attribute [Authorize(Roles = nameof(GlobalRole.Admin))]
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject IUserProvisioningService Provisioning
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Tạo dự án mới - CMC TS</PageTitle>
+
+<h1>Tạo dự án mới</h1>
+
+<EditForm Model="Form" OnValidSubmit="SubmitAsync" FormName="new-project">
+    <DataAnnotationsValidator />
+
+    <div class="field">
+        <label for="name">Tên dự án</label>
+        <InputText id="name" @bind-Value="Form.Name" placeholder="VD: ENT - CIC - Nâng cấp hệ thống AD, Email, File server" />
+    </div>
+
+    <div class="field-row">
+        <div class="field">
+            <label for="fy">Năm tài chính</label>
+            <InputText id="fy" @bind-Value="Form.FiscalYear" />
+        </div>
+        <div class="field">
+            <label for="bu">Khối kinh doanh</label>
+            <InputSelect id="bu" @bind-Value="Form.BusinessUnit">
+                @foreach (var bu in Enum.GetValues<BusinessUnit>())
+                {
+                    <option value="@bu">@bu</option>
+                }
+            </InputSelect>
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Công nghệ liên quan</label>
+        <div class="tech-list">
+            @foreach (var t in Technologies)
+            {
+                <label class="tech-chip">
+                    <input type="checkbox" checked="@SelectedTechnologyIds.Contains(t.Id)" @onchange="e => ToggleTechnology(t.Id, e.Value)" />
+                    @t.Name
+                </label>
+            }
+        </div>
+    </div>
+
+    <div class="field">
+        <label>Thành viên tham gia</label>
+        <AdUserPicker OnUserSelected="AddMemberAsync"
+                      IsDisabled="r => Members.Any(m => m.SamAccountName == r.SamAccountName)"
+                      SelectLabel="Thêm vào dự án"
+                      DisabledLabel="Đã thêm" />
+
+        @if (Members.Count > 0)
+        {
+            <ul class="member-list">
+                @foreach (var m in Members)
+                {
+                    <li>
+                        <span>@m.DisplayName <span class="muted">(@m.SamAccountName)</span></span>
+                        <button type="button" @onclick="() => RemoveMember(m.UserId)">Xóa</button>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="field">
+        <label for="lead">Trưởng dự án</label>
+        <InputSelect id="lead" @bind-Value="Form.ProjectLeadUserId">
+            <option value="">-- Chưa chọn --</option>
+            @foreach (var m in Members)
+            {
+                <option value="@m.UserId">@m.DisplayName</option>
+            }
+        </InputSelect>
+        <p class="field-hint">Chỉ chọn được trong danh sách thành viên đã thêm ở trên.</p>
+    </div>
+
+    @if (SubmitError is not null)
+    {
+        <div class="error-box">@SubmitError</div>
+    }
+
+    <button type="submit" class="btn-primary">Tạo dự án</button>
+</EditForm>
+
+@code {
+    private ProjectForm Form { get; set; } = new();
+    private List<Technology> Technologies { get; set; } = new();
+    private HashSet<int> SelectedTechnologyIds { get; set; } = new();
+    private List<MemberRow> Members { get; set; } = new();
+    private string? SubmitError { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Form.FiscalYear = CmcTs.Core.FiscalYear.GetLabel(DateTime.Now);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        Technologies = await db.Technologies.Where(t => t.IsActive).OrderBy(t => t.Name).ToListAsync();
+    }
+
+    private void ToggleTechnology(int id, object? checkedValue)
+    {
+        var isChecked = checkedValue is bool b && b;
+        if (isChecked)
+        {
+            SelectedTechnologyIds.Add(id);
+        }
+        else
+        {
+            SelectedTechnologyIds.Remove(id);
+        }
+    }
+
+    private async Task AddMemberAsync(AdUserInfo adUser)
+    {
+        var user = await Provisioning.GetOrCreateStubAsync(adUser);
+        if (Members.Any(m => m.UserId == user.Id))
+        {
+            return;
+        }
+        Members.Add(new MemberRow(user.Id, user.DisplayName, user.SamAccountName));
+    }
+
+    private void RemoveMember(int userId)
+    {
+        Members.RemoveAll(m => m.UserId == userId);
+        if (Form.ProjectLeadUserId == userId.ToString())
+        {
+            Form.ProjectLeadUserId = "";
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        SubmitError = null;
+
+        if (string.IsNullOrWhiteSpace(Form.Name))
+        {
+            SubmitError = "Vui lòng nhập tên dự án.";
+            return;
+        }
+        if (Members.Count == 0)
+        {
+            SubmitError = "Cần thêm ít nhất 1 thành viên trước khi tạo dự án.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(Form.ProjectLeadUserId))
+        {
+            SubmitError = "Vui lòng chọn Trưởng dự án.";
+            return;
+        }
+
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var currentUserId = authState.User.GetUserId();
+        if (currentUserId is null)
+        {
+            SubmitError = "Không xác định được người dùng hiện tại, vui lòng đăng nhập lại.";
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var project = new Project
+        {
+            Name = Form.Name.Trim(),
+            FiscalYear = Form.FiscalYear.Trim(),
+            BusinessUnit = Form.BusinessUnit,
+            ProjectLeadUserId = int.Parse(Form.ProjectLeadUserId),
+            Status = ProjectStatus.InProgress,
+            CreatedByUserId = currentUserId.Value,
+            CreatedAt = DateTime.UtcNow,
+        };
+
+        foreach (var techId in SelectedTechnologyIds)
+        {
+            project.ProjectTechnologies.Add(new ProjectTechnology { TechnologyId = techId });
+        }
+        foreach (var m in Members)
+        {
+            project.Members.Add(new ProjectMember { UserId = m.UserId, AddedAt = DateTime.UtcNow });
+        }
+
+        db.Projects.Add(project);
+        await db.SaveChangesAsync();
+
+        Navigation.NavigateTo($"/projects/{project.Id}");
+    }
+
+    private class ProjectForm
+    {
+        [Required]
+        public string Name { get; set; } = string.Empty;
+
+        [Required]
+        public string FiscalYear { get; set; } = string.Empty;
+
+        public BusinessUnit BusinessUnit { get; set; } = BusinessUnit.ENT;
+
+        public string ProjectLeadUserId { get; set; } = string.Empty;
+    }
+
+    private record MemberRow(int UserId, string DisplayName, string SamAccountName);
+}

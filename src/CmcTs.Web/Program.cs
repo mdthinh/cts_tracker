@@ -25,6 +25,7 @@ builder.Services.AddScoped<IUserProvisioningService, UserProvisioningService>();
 builder.Services.Configure<LocalAdminOptions>(builder.Configuration.GetSection(LocalAdminOptions.SectionName));
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<ILocalAccountService, LocalAccountService>();
+builder.Services.AddScoped<IReferenceDataSeedService, ReferenceDataSeedService>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -47,16 +48,17 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     try
     {
         await scope.ServiceProvider.GetRequiredService<ILocalAccountService>().EnsureSeededAsync();
+        await scope.ServiceProvider.GetRequiredService<IReferenceDataSeedService>().EnsureSeededAsync();
     }
     catch (Exception ex)
     {
         // Không chặn khởi động app vì lỗi này (thường do DB chưa migrate) — log rõ để ops xử lý,
         // thay vì crash-loop toàn bộ tiến trình khi mới deploy lần đầu.
-        scope.ServiceProvider.GetRequiredService<ILogger<Program>>()
-            .LogError(ex, "Seed tài khoản admin local thất bại — kiểm tra đã chạy `dotnet ef database update` chưa.");
+        logger.LogError(ex, "Seed dữ liệu ban đầu thất bại — kiểm tra đã chạy `dotnet ef database update` chưa.");
     }
 }
 
