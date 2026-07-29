@@ -1,0 +1,10 @@
+tr td {
+    padding: 7px 10px;
+    border-bottom: 1px solid #DBD7CC;
+    font-size: 13.5px;
+}
+
+.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}

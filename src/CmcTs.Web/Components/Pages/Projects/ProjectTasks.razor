@@ -1,0 +1,75 @@
+@page "/projects/{Id:int}/tasks"
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
+
+<PageTitle>Công việc - CMC TS</PageTitle>
+
+@if (Project is null)
+{
+    <p>Đang tải...</p>
+}
+else
+{
+    <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
+    <h1>Cây công việc — @Project.Name</h1>
+    <p class="hint">
+        Gán người phụ trách từng công việc sẽ có ở bước tiếp theo. Trang này hiện chỉ để xem lại
+        cây công việc đã import từ file Dự toán.
+    </p>
+
+    @if (RootTasks.Count == 0)
+    {
+        <p class="hint">Dự án chưa import Dự toán.</p>
+    }
+    else
+    {
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Mã</th>
+                    <th>Công việc</th>
+                    <th class="num">Manday (KH)</th>
+                    <th class="num">Chi phí</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var root in RootTasks)
+                {
+                    <TaskTreeRow Node="root" Depth="0" />
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Project? Project;
+    private List<TaskItem> RootTasks { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        Project = await db.Projects.FindAsync(Id);
+        if (Project is null)
+        {
+            return;
+        }
+
+        var allTasks = await db.Tasks
+            .Where(t => t.ProjectId == Id)
+            .OrderBy(t => t.SourceRow)
+            .ToListAsync();
+
+        var byId = allTasks.ToDictionary(t => t.Id);
+        foreach (var t in allTasks)
+        {
+            if (t.ParentTaskId is int parentId && byId.TryGetValue(parentId, out var parent))
+            {
+                parent.Children.Add(t);
+            }
+        }
+        RootTasks = allTasks.Where(t => t.ParentTaskId is null).ToList();
+    }
+}

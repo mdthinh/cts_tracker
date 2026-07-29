@@ -1,0 +1,309 @@
+@page "/projects/{Id:int}/import"
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject IEstimateImportParser Parser
+@inject IEstimateImportService ImportService
+@inject IFileStorageService Storage
+@inject AuthenticationStateProvider AuthProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Upload Dự toán - CMC TS</PageTitle>
+
+@if (Project is null)
+{
+    <p>Đang tải...</p>
+}
+else if (!CanImport)
+{
+    <p class="hint">Bạn không có quyền upload Dự toán cho dự án này.</p>
+}
+else
+{
+    <h1>Upload Dự toán — @Project.Name</h1>
+
+    @if (Parsed is null)
+    {
+        <div class="field">
+            <label>Chọn file Dự toán (.xls hoặc .xlsx)</label>
+            <InputFile OnChange="OnFileSelectedAsync" accept=".xls,.xlsx" />
+        </div>
+        @if (ParseError is not null)
+        {
+            <div class="error-box">@ParseError</div>
+        }
+    }
+    else
+    {
+        <h2>Xem trước — kiểm tra kỹ trước khi lưu</h2>
+        <p class="hint">
+            Hệ thống tự nhận diện cấp công việc từ cấu trúc cột STT. Nếu có dòng nhận nhầm cấp,
+            sửa lại ở cột "Cấp" bên dưới rồi số Manday/Chi phí tổng sẽ tự tính lại.
+        </p>
+
+        <h3>Chi phí tổng hợp</h3>
+        <table class="summary-table">
+            <thead><tr><th>Hạng mục</th><th class="num">Số tiền</th><th>Doanh thu?</th></tr></thead>
+            <tbody>
+                @foreach (var c in Parsed.CostSummaries)
+                {
+                    <tr>
+                        <td>@c.Category</td>
+                        <td class="num">@c.Amount.ToString("N0")</td>
+                        <td>@(c.IsRevenueSource ? "Doanh thu dự án" : "-")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (Parsed.Warnings.Count > 0)
+        {
+            <div class="warn-box">
+                <strong>Cần kiểm tra lại:</strong>
+                <ul>
+                    @foreach (var w in Parsed.Warnings)
+                    {
+                        <li>@w</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <h3>Cây công việc (@FlatRows.Count(r => r.Level == 3) task cuối)</h3>
+        <table class="tree-table">
+            <thead>
+                <tr>
+                    <th>Cấp</th>
+                    <th>Tên công việc</th>
+                    <th class="num">Manday</th>
+                    <th class="num">Chi phí</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in FlatRows)
+                {
+                    <tr>
+                        <td>
+                            <select @bind="row.Level" @bind:after="Recalculate">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                            </select>
+                        </td>
+                        <td style="padding-left:@((row.Level - 1) * 18)px">
+                            <input type="text" @bind="row.Name" />
+                        </td>
+                        <td class="num">
+                            @if (row.Level == 3 && !row.IsPackage)
+                            {
+                                <input type="number" step="0.5" @bind="row.MandayPlan" @bind:after="Recalculate" />
+                            }
+                            else
+                            {
+                                @row.MandayPlan.ToString("N1")
+                            }
+                        </td>
+                        <td class="num">@row.CostPlan.ToString("N0")</td>
+                        <td><button type="button" @onclick="() => RemoveRow(row)">Xóa</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        @if (CommitError is not null)
+        {
+            <div class="error-box">@CommitError</div>
+        }
+
+        <div class="actions">
+            <button type="button" class="btn-primary" @onclick="CommitAsync" disabled="@IsSaving">
+                @(IsSaving ? "Đang lưu..." : "Xác nhận & lưu")
+            </button>
+            <button type="button" class="btn-secondary" @onclick="Reset" disabled="@IsSaving">Hủy, chọn file khác</button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Project? Project;
+    private bool CanImport;
+    private ParsedEstimateResult? Parsed;
+    private List<EditableRow> FlatRows { get; set; } = new();
+    private string? ParseError;
+    private string? CommitError;
+    private bool IsSaving;
+    private byte[]? _fileBytes;
+    private string _fileName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        var userId = authState.User.GetUserId();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        Project = await db.Projects.FindAsync(Id);
+        if (Project is null)
+        {
+            return;
+        }
+
+        CanImport = authState.User.IsAdmin() || (userId is not null && Project.ProjectLeadUserId == userId);
+    }
+
+    private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        ParseError = null;
+        try
+        {
+            var file = e.File;
+            _fileName = file.Name;
+
+            using var ms = new MemoryStream();
+            await using (var stream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024))
+            {
+                await stream.CopyToAsync(ms);
+            }
+            _fileBytes = ms.ToArray();
+
+            using var parseStream = new MemoryStream(_fileBytes);
+            Parsed = Parser.Parse(parseStream);
+            FlatRows = Flatten(Parsed.RootTasks);
+        }
+        catch (Exception ex)
+        {
+            ParseError = $"Không đọc được file: {ex.Message}";
+            Parsed = null;
+        }
+    }
+
+    private static List<EditableRow> Flatten(List<ParsedTaskNode> nodes)
+    {
+        var list = new List<EditableRow>();
+
+        void Visit(ParsedTaskNode n)
+        {
+            list.Add(new EditableRow
+            {
+                Level = n.Level,
+                Code = n.Code,
+                Name = n.Name,
+                MandayPlan = n.MandayPlan,
+                CostPlan = n.CostPlan,
+                IsPackage = n.IsPackage,
+                SourceRow = n.SourceRow,
+                HeadCount = n.HeadCount,
+                Days = n.Days,
+                StaffGroup = n.StaffGroup,
+                UnitPrice = n.UnitPrice,
+            });
+            foreach (var child in n.Children)
+            {
+                Visit(child);
+            }
+        }
+
+        foreach (var root in nodes)
+        {
+            Visit(root);
+        }
+        return list;
+    }
+
+    // Dựng lại cây từ danh sách phẳng hiện tại (đã có thể bị sửa Level/Manday) để tính lại rollup
+    // Level 1/2, rồi trải phẳng lại — giữ đúng dữ liệu leaf người dùng vừa sửa.
+    private void Recalculate()
+    {
+        var nodes = FlatRows.Select(ToNode).ToList();
+        var tree = TaskTreeBuilder.Build(nodes);
+        FlatRows = Flatten(tree);
+    }
+
+    private void RemoveRow(EditableRow row)
+    {
+        FlatRows.Remove(row);
+        Recalculate();
+    }
+
+    private void Reset()
+    {
+        Parsed = null;
+        FlatRows = new();
+        _fileBytes = null;
+        ParseError = null;
+    }
+
+    private static ParsedTaskNode ToNode(EditableRow r) => new()
+    {
+        Level = r.Level,
+        Code = r.Code,
+        Name = r.Name,
+        MandayPlan = r.MandayPlan,
+        CostPlan = r.CostPlan,
+        IsPackage = r.IsPackage,
+        SourceRow = r.SourceRow,
+        HeadCount = r.HeadCount,
+        Days = r.Days,
+        StaffGroup = r.StaffGroup,
+        UnitPrice = r.UnitPrice,
+    };
+
+    private async Task CommitAsync()
+    {
+        CommitError = null;
+        if (Project is null || _fileBytes is null || Parsed is null)
+        {
+            return;
+        }
+
+        IsSaving = true;
+        try
+        {
+            var authState = await AuthProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.GetUserId();
+            if (userId is null)
+            {
+                CommitError = "Không xác định được người dùng hiện tại, vui lòng đăng nhập lại.";
+                return;
+            }
+
+            var tree = TaskTreeBuilder.Build(FlatRows.Select(ToNode).ToList());
+
+            using var saveStream = new MemoryStream(_fileBytes);
+            var savedPath = await Storage.SaveAsync($"projects/{Id}/estimates", _fileName, saveStream);
+
+            var parsedForCommit = new ParsedEstimateResult
+            {
+                CostSummaries = Parsed.CostSummaries,
+                RootTasks = tree,
+            };
+
+            await ImportService.CommitAsync(Id, _fileName, savedPath, userId.Value, parsedForCommit);
+            Navigation.NavigateTo($"/projects/{Id}");
+        }
+        catch (Exception ex)
+        {
+            CommitError = ex.Message;
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private class EditableRow
+    {
+        public int Level { get; set; }
+        public string? Code { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public decimal MandayPlan { get; set; }
+        public decimal CostPlan { get; set; }
+        public bool IsPackage { get; set; }
+        public int SourceRow { get; set; }
+        public decimal? HeadCount { get; set; }
+        public decimal? Days { get; set; }
+        public string? StaffGroup { get; set; }
+        public decimal? UnitPrice { get; set; }
+    }
+}

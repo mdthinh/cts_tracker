@@ -1,5 +1,6 @@
 using CmcTs.Core.Data;
 using CmcTs.Core.Entities;
+using CmcTs.Core.Import;
 using CmcTs.Core.Options;
 using CmcTs.Core.Services;
 using CmcTs.Web.Components;
@@ -26,6 +27,11 @@ builder.Services.Configure<LocalAdminOptions>(builder.Configuration.GetSection(L
 builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
 builder.Services.AddScoped<ILocalAccountService, LocalAccountService>();
 builder.Services.AddScoped<IReferenceDataSeedService, ReferenceDataSeedService>();
+
+builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
+builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
+builder.Services.AddScoped<IEstimateImportParser, EstimateImportParser>();
+builder.Services.AddScoped<IEstimateImportService, EstimateImportService>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

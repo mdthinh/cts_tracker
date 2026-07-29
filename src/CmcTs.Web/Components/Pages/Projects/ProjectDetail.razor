@@ -56,6 +56,24 @@ else
                 </li>
             }
         </ul>
+
+        <h2>Dự toán &amp; Công việc</h2>
+        @if (TaskCount == 0)
+        {
+            <p class="hint">Chưa import Dự toán.</p>
+            @if (CanEdit)
+            {
+                <a class="btn-secondary" href="/projects/@Id/import">Upload Dự toán</a>
+            }
+        }
+        else
+        {
+            <div class="view-grid">
+                <div class="view-field"><span class="label">Doanh thu (từ Chi phí Manday)</span><span>@(Project.RevenueAmount?.ToString("N0") ?? "-") đ</span></div>
+                <div class="view-field"><span class="label">Số task cuối</span><span>@TaskCount</span></div>
+            </div>
+            <a class="btn-secondary" href="/projects/@Id/tasks">Xem cây công việc</a>
+        }
     }
     else
     {
@@ -149,6 +167,7 @@ else
     private bool CanEdit { get; set; }
     private bool EditMode { get; set; }
     private int? CurrentUserId { get; set; }
+    private int TaskCount { get; set; }
 
     private string EditName { get; set; } = string.Empty;
     private string EditFiscalYear { get; set; } = string.Empty;
@@ -185,6 +204,7 @@ else
         }
 
         CanEdit = user.IsAdmin() || (CurrentUserId is not null && Project.ProjectLeadUserId == CurrentUserId);
+        TaskCount = await db.Tasks.CountAsync(t => t.ProjectId == Id && t.Level == TaskLevel.Level3);
     }
 
     private void StartEdit()

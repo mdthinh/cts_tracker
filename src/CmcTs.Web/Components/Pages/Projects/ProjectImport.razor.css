@@ -1,0 +1,132 @@
+.hint {
+    color: #6B6459;
+    font-size: 13.5px;
+    max-width: 640px;
+}
+
+.field {
+    margin: 16px 0;
+}
+
+.field label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #6B6459;
+    margin-bottom: 8px;
+}
+
+.error-box {
+    background: #F5E1DF;
+    color: #AE3B35;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+    max-width: 640px;
+}
+
+.warn-box {
+    background: #F5E9D8;
+    color: #B5792B;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 12px 0 20px;
+}
+
+.warn-box ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+}
+
+.summary-table, .tree-table {
+    width: 100%;
+    max-width: 900px;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+}
+
+.summary-table th, .tree-table th {
+    text-align: left;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6B6459;
+    padding: 0 10px 8px;
+    border-bottom: 1px solid #DBD7CC;
+}
+
+.summary-table td, .tree-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #DBD7CC;
+    vertical-align: middle;
+}
+
+.summary-table .num, .tree-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.tree-table select {
+    padding: 4px 6px;
+}
+
+.tree-table input[type="text"] {
+    width: 100%;
+    border: 1px solid transparent;
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+
+.tree-table input[type="text"]:focus, .tree-table input[type="number"]:focus {
+    border-color: #DBD7CC;
+    outline: none;
+}
+
+.tree-table input[type="number"] {
+    width: 80px;
+    border: 1px solid transparent;
+    padding: 4px 6px;
+    border-radius: 4px;
+    text-align: right;
+}
+
+.tree-table button {
+    background: none;
+    border: none;
+    color: #AE3B35;
+    cursor: pointer;
+    font-size: 12.5px;
+}
+
+.actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.btn-primary {
+    background: #1F3A5F;
+    color: #fff;
+    border: none;
+    border-radius: 7px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.btn-secondary {
+    background: #ECEAE2;
+    color: #16212B;
+    border: 1px solid #DBD7CC;
+    border-radius: 7px;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}

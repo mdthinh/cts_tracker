@@ -190,6 +190,8 @@
 }
 
 .btn-secondary {
+    display: inline-block;
+    text-decoration: none;
     background: #ECEAE2;
     color: #16212B;
     border: 1px solid #DBD7CC;

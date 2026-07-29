@@ -1,0 +1,15 @@
+<tr>
+    <td>@Node.Code</td>
+    <td><span style="padding-left:@(Depth * 18)px">@Node.Name</span></td>
+    <td class="num">@Node.MandayPlan.ToString("N1")</td>
+    <td class="num">@Node.CostPlan.ToString("N0")</td>
+</tr>
+@foreach (var child in Node.Children.OrderBy(c => c.SourceRow))
+{
+    <TaskTreeRow Node="child" Depth="Depth + 1" />
+}
+
+@code {
+    [Parameter, EditorRequired] public TaskItem Node { get; set; } = null!;
+    [Parameter] public int Depth { get; set; }
+}
