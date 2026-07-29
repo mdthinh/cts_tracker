@@ -103,3 +103,31 @@
         overflow-y: auto;
     }
 }
+
+.nav-account {
+    margin-top: auto;
+    padding: 1rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.nav-account-name {
+    color: #d7d7d7;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+}
+
+.nav-logout {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    color: #d7d7d7;
+    border: none;
+    border-radius: 4px;
+    padding: 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.nav-logout:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}

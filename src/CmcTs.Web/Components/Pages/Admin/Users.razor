@@ -1,0 +1,188 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = nameof(GlobalRole.Admin))]
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject ILdapService Ldap
+
+<PageTitle>Quản lý người dùng - CMC TS</PageTitle>
+
+<h1>Quản lý người dùng</h1>
+<p class="hint">
+    Tài khoản chỉ xuất hiện trong bảng bên dưới sau khi họ đã tự đăng nhập ít nhất 1 lần,
+    hoặc bạn chủ động tìm trên AD và thêm vào trước.
+</p>
+
+<section class="ad-search">
+    <input type="text" placeholder="Tìm theo tên hoặc tài khoản AD..." @bind="SearchTerm" @bind:event="oninput" @onkeydown="OnSearchKeyDown" />
+    <button type="button" @onclick="SearchAsync" disabled="@IsSearching">Tìm trên AD</button>
+</section>
+
+@if (SearchError is not null)
+{
+    <div class="error-box">@SearchError</div>
+}
+
+@if (SearchResults.Count > 0)
+{
+    <ul class="ad-results">
+        @foreach (var r in SearchResults)
+        {
+            var alreadyAdded = ExistingSamAccounts.Contains(r.SamAccountName);
+            <li>
+                <span>
+                    <strong>@r.DisplayName</strong>
+                    <span class="muted">@r.SamAccountName · @r.Department</span>
+                </span>
+                <button type="button" disabled="@alreadyAdded" @onclick="() => AddUserAsync(r)">
+                    @(alreadyAdded ? "Đã có trong hệ thống" : "Thêm vào hệ thống")
+                </button>
+            </li>
+        }
+    </ul>
+}
+
+<table class="user-table">
+    <thead>
+        <tr>
+            <th>Tên</th>
+            <th>Tài khoản AD</th>
+            <th>Phòng ban</th>
+            <th>Vai trò</th>
+            <th>Trạng thái</th>
+            <th>Đồng bộ AD gần nhất</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var u in UserList)
+        {
+            <tr>
+                <td>@u.DisplayName</td>
+                <td>@u.SamAccountName</td>
+                <td>@u.Department</td>
+                <td>
+                    <select value="@u.GlobalRole.ToString()" @onchange="e => ChangeRoleAsync(u, e.Value!.ToString()!)">
+                        <option value="@nameof(GlobalRole.Viewer)">Viewer</option>
+                        <option value="@nameof(GlobalRole.Admin)">Admin</option>
+                    </select>
+                </td>
+                <td>
+                    <button type="button" class="@(u.IsActive ? "btn-active" : "btn-inactive")" @onclick="() => ToggleActiveAsync(u)">
+                        @(u.IsActive ? "Đang hoạt động" : "Đã vô hiệu hóa")
+                    </button>
+                </td>
+                <td class="muted">@(u.LastSyncedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+    private List<User> UserList { get; set; } = new();
+    private HashSet<string> ExistingSamAccounts { get; set; } = new();
+
+    private string SearchTerm { get; set; } = string.Empty;
+    private bool IsSearching { get; set; }
+    private string? SearchError { get; set; }
+    private List<AdUserInfo> SearchResults { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadUsersAsync();
+    }
+
+    private async Task ReloadUsersAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        UserList = await db.Users.OrderBy(u => u.DisplayName).ToListAsync();
+        ExistingSamAccounts = UserList.Select(u => u.SamAccountName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchAsync();
+        }
+    }
+
+    private async Task SearchAsync()
+    {
+        SearchError = null;
+        if (string.IsNullOrWhiteSpace(SearchTerm))
+        {
+            SearchResults = new();
+            return;
+        }
+
+        IsSearching = true;
+        try
+        {
+            var results = await Ldap.SearchUsersAsync(SearchTerm);
+            SearchResults = results.ToList();
+        }
+        catch (Exception ex)
+        {
+            SearchError = $"Không tìm được trên AD: {ex.Message}";
+            SearchResults = new();
+        }
+        finally
+        {
+            IsSearching = false;
+        }
+    }
+
+    private async Task AddUserAsync(AdUserInfo adUser)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Users.AnyAsync(u => u.SamAccountName == adUser.SamAccountName))
+        {
+            return;
+        }
+
+        db.Users.Add(new User
+        {
+            SamAccountName = adUser.SamAccountName,
+            DisplayName = adUser.DisplayName,
+            Email = adUser.Email,
+            Department = adUser.Department,
+            GlobalRole = GlobalRole.Viewer,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        await ReloadUsersAsync();
+    }
+
+    private async Task ChangeRoleAsync(User user, string newRole)
+    {
+        if (!Enum.TryParse<GlobalRole>(newRole, out var role) || role == user.GlobalRole)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Users.FindAsync(user.Id);
+        if (entity is null)
+        {
+            return;
+        }
+
+        entity.GlobalRole = role;
+        await db.SaveChangesAsync();
+        user.GlobalRole = role;
+    }
+
+    private async Task ToggleActiveAsync(User user)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Users.FindAsync(user.Id);
+        if (entity is null)
+        {
+            return;
+        }
+
+        entity.IsActive = !entity.IsActive;
+        await db.SaveChangesAsync();
+        user.IsActive = entity.IsActive;
+    }
+}
