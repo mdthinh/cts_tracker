@@ -45,7 +45,8 @@
     <thead>
         <tr>
             <th>Tên</th>
-            <th>Tài khoản AD</th>
+            <th>Tài khoản</th>
+            <th>Loại</th>
             <th>Phòng ban</th>
             <th>Vai trò</th>
             <th>Trạng thái</th>
@@ -58,6 +59,7 @@
             <tr>
                 <td>@u.DisplayName</td>
                 <td>@u.SamAccountName</td>
+                <td class="muted">@(u.IsLocalAccount ? "Local" : "AD")</td>
                 <td>@u.Department</td>
                 <td>
                     <select value="@u.GlobalRole.ToString()" @onchange="e => ChangeRoleAsync(u, e.Value!.ToString()!)">

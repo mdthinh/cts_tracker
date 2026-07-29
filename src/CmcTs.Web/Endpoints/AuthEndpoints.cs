@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using CmcTs.Core.Entities;
 using CmcTs.Core.Services;
 using CmcTs.Web.Auth;
 using Microsoft.AspNetCore.Authentication;
@@ -17,43 +18,37 @@ public static class AuthEndpoints
         app.MapPost("/auth/login", async (
             HttpContext http,
             ILdapService ldap,
-            IUserProvisioningService provisioning) =>
+            IUserProvisioningService provisioning,
+            ILocalAccountService localAccounts) =>
         {
             var form = await http.Request.ReadFormAsync();
-            var username = form["username"].ToString().Trim();
+            var username = NormalizeUsername(form["username"].ToString());
             var password = form["password"].ToString();
             var returnUrl = SafeLocalUrl(form["returnUrl"].ToString());
 
-            var adUser = await ldap.AuthenticateAsync(username, password, http.RequestAborted);
-            if (adUser is null)
+            // Thử tài khoản local trước (admin break-glass), sau đó mới tới AD — 1 username chỉ
+            // khớp được 1 trong 2 loại nên không có rủi ro nhầm lẫn giữa 2 luồng xác thực.
+            var user = await localAccounts.ValidateAsync(username, password, http.RequestAborted);
+            if (user is null)
+            {
+                var adUser = await ldap.AuthenticateAsync(username, password, http.RequestAborted);
+                if (adUser is not null)
+                {
+                    user = await provisioning.ProvisionOnLoginAsync(adUser, http.RequestAborted);
+                }
+            }
+
+            if (user is null)
             {
                 return Results.Redirect($"/login?error=invalid&returnUrl={Uri.EscapeDataString(returnUrl)}");
             }
 
-            var user = await provisioning.ProvisionOnLoginAsync(adUser, http.RequestAborted);
             if (!user.IsActive)
             {
                 return Results.Redirect("/login?error=disabled");
             }
 
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new(ClaimTypes.Name, user.DisplayName),
-                new(ClaimTypes.Role, user.GlobalRole.ToString()),
-                new(AppClaimTypes.SamAccountName, user.SamAccountName),
-            };
-            if (!string.IsNullOrWhiteSpace(user.Email))
-            {
-                claims.Add(new Claim(ClaimTypes.Email, user.Email));
-            }
-
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            await http.SignInAsync(
-                CookieAuthenticationDefaults.AuthenticationScheme,
-                new ClaimsPrincipal(identity),
-                new AuthenticationProperties { IsPersistent = true });
-
+            await SignInAsync(http, user);
             return Results.Redirect(returnUrl);
         }).DisableAntiforgery().AllowAnonymous();
 
@@ -62,6 +57,35 @@ public static class AuthEndpoints
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.Redirect("/login");
         }).DisableAntiforgery().AllowAnonymous();
+    }
+
+    private static async Task SignInAsync(HttpContext http, User user)
+    {
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
+            new(ClaimTypes.Name, user.DisplayName),
+            new(ClaimTypes.Role, user.GlobalRole.ToString()),
+            new(AppClaimTypes.SamAccountName, user.SamAccountName),
+        };
+        if (!string.IsNullOrWhiteSpace(user.Email))
+        {
+            claims.Add(new Claim(ClaimTypes.Email, user.Email));
+        }
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        await http.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(identity),
+            new AuthenticationProperties { IsPersistent = true });
+    }
+
+    // Chấp nhận cả "MDT\mdthinh" lẫn "mdthinh" — chỉ lấy phần username, bỏ tiền tố domain nếu có.
+    private static string NormalizeUsername(string? input)
+    {
+        var value = (input ?? string.Empty).Trim();
+        var backslashIndex = value.LastIndexOf('\\');
+        return backslashIndex >= 0 ? value[(backslashIndex + 1)..] : value;
     }
 
     // Chỉ chấp nhận đường dẫn nội bộ (bắt đầu bằng "/", không phải "//" hay "/\") để tránh open redirect.

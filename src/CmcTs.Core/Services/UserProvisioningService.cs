@@ -8,18 +8,20 @@ namespace CmcTs.Core.Services;
 
 public class UserProvisioningService : IUserProvisioningService
 {
-    private readonly CmcTsDbContext _db;
+    private readonly IDbContextFactory<CmcTsDbContext> _dbFactory;
     private readonly LdapOptions _options;
 
-    public UserProvisioningService(CmcTsDbContext db, IOptions<LdapOptions> options)
+    public UserProvisioningService(IDbContextFactory<CmcTsDbContext> dbFactory, IOptions<LdapOptions> options)
     {
-        _db = db;
+        _dbFactory = dbFactory;
         _options = options.Value;
     }
 
     public async Task<User> ProvisionOnLoginAsync(AdUserInfo adUser, CancellationToken ct = default)
     {
-        var user = await _db.Users.SingleOrDefaultAsync(u => u.SamAccountName == adUser.SamAccountName, ct);
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var user = await db.Users.SingleOrDefaultAsync(u => u.SamAccountName == adUser.SamAccountName, ct);
         var isBootstrapAdmin = _options.InitialAdminSamAccountNames
             .Any(s => string.Equals(s, adUser.SamAccountName, StringComparison.OrdinalIgnoreCase));
 
@@ -36,7 +38,7 @@ public class UserProvisioningService : IUserProvisioningService
                 CreatedAt = DateTime.UtcNow,
                 LastSyncedAt = DateTime.UtcNow,
             };
-            _db.Users.Add(user);
+            db.Users.Add(user);
         }
         else
         {
@@ -53,7 +55,7 @@ public class UserProvisioningService : IUserProvisioningService
             }
         }
 
-        await _db.SaveChangesAsync(ct);
+        await db.SaveChangesAsync(ct);
         return user;
     }
 }
