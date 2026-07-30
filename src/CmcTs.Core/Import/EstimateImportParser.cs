@@ -22,6 +22,7 @@ public class EstimateImportParser : IEstimateImportParser
     private const int ColStaffGroup = 4; // E - Nhóm nhân viên
     private const int ColUnitPrice = 5; // F - Đơn giá
     private const int ColCost = 6; // G - Dự toán (thành tiền)
+    private const int ColNote = 7; // H - Ghi chú (1 số file điền số tiền ở đây thay vì cột G cho leaf trọn gói)
 
     // Trên sheet "Du toan": nhãn "DỰ TOÁN" và số tiền tương ứng (dòng ngay dưới) đều nằm ở cột D.
     private const int ColSummaryLabel = 3;
@@ -154,6 +155,18 @@ public class EstimateImportParser : IEstimateImportParser
         node.StaffGroup = GetStringValue(row.GetCell(ColStaffGroup))?.Trim();
         node.UnitPrice = GetNumericValue(row.GetCell(ColUnitPrice), evaluator);
         node.CostPlan = GetNumericValue(row.GetCell(ColCost), evaluator) ?? 0m;
+
+        // Một số file điền số tiền ở cột "Ghi chú" (H) thay vì cột "Dự toán" (G) cho leaf trọn gói
+        // (vd cột G để trống nhưng H có số tiền thật) — nếu G trống, thử lấy từ H làm phương án dự phòng.
+        if (node.CostPlan == 0m)
+        {
+            var noteAmount = GetNumericValue(row.GetCell(ColNote), evaluator);
+            if (noteAmount is > 0m)
+            {
+                node.CostPlan = noteAmount.Value;
+                warnings.Add($"Dòng {node.SourceRow}: \"{node.Name}\" không có số tiền ở cột Dự toán, đã lấy {noteAmount.Value:N0} từ cột Ghi chú — kiểm tra lại cho chắc.");
+            }
+        }
 
         if (daysNumeric is not null)
         {

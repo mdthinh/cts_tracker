@@ -48,3 +48,24 @@
     background: #F5E1DF;
     color: #AE3B35;
 }
+
+.btn-delete {
+    background: none;
+    border: none;
+    color: #AE3B35;
+    cursor: pointer;
+    font-size: 12.5px;
+}
+
+.btn-delete:hover {
+    text-decoration: underline;
+}
+
+.error-box {
+    background: #F5E1DF;
+    color: #AE3B35;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 12px 0;
+    max-width: 640px;
+}

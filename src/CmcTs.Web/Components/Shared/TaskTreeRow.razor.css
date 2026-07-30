@@ -8,3 +8,26 @@ tr td {
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
+
+tr.level-1 {
+    background: #1F3A5F;
+}
+
+tr.level-1 td {
+    color: #fff;
+    font-weight: 600;
+    border-bottom-color: #16212B;
+}
+
+tr.level-2 {
+    background: #E4EAF1;
+}
+
+tr.level-2 td {
+    color: #1F3A5F;
+    font-weight: 600;
+}
+
+tr.level-3 {
+    background: #fff;
+}

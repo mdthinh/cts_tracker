@@ -82,7 +82,7 @@ else
             <tbody>
                 @foreach (var row in FlatRows)
                 {
-                    <tr>
+                    <tr class="level-@row.Level">
                         <td>
                             <select @bind="row.Level" @bind:after="Recalculate">
                                 <option value="1">1</option>

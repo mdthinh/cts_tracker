@@ -62,20 +62,30 @@ public class EstimateImportParserTests
 
         // Level1 "TRIỂN KHAI" không có Level2 con — leaf phải nằm thẳng dưới Level1.
         var trienKhai = result.RootTasks.Single(t => t.Name == "TRIỂN KHAI");
-        var nghiemThu = Assert.Single(trienKhai.Children);
+        Assert.Equal(2, trienKhai.Children.Count);
+
+        var nghiemThu = trienKhai.Children.Single(t => t.Name == "Nghiệm thu");
         Assert.Equal(3, nghiemThu.Level);
         Assert.True(nghiemThu.IsPackage);
         Assert.Equal(0m, nghiemThu.MandayPlan);
         Assert.Equal(5_000_000m, nghiemThu.CostPlan);
-        Assert.Equal(0m, trienKhai.MandayPlan);
-        Assert.Equal(5_000_000m, trienKhai.CostPlan);
-
         Assert.Contains(result.Warnings, w => w.Contains("Nghiệm thu") && w.Contains("trọn gói"));
+
+        // Leaf trọn gói khác: cột "Dự toán" (G) để trống, số tiền thật nằm ở cột "Ghi chú" (H) —
+        // gặp thật khi test với 1 file khách hàng khác, parser phải lấy H làm phương án dự phòng
+        // thay vì để chi phí = 0.
+        var hoTro = trienKhai.Children.Single(t => t.Name == "Hỗ trợ 24/7");
+        Assert.True(hoTro.IsPackage);
+        Assert.Equal(0m, hoTro.MandayPlan);
+        Assert.Equal(8_000_000m, hoTro.CostPlan);
+        Assert.Contains(result.Warnings, w => w.Contains("Hỗ trợ 24/7") && w.Contains("cột Ghi chú"));
+
+        Assert.Equal(0m, trienKhai.MandayPlan);
+        Assert.Equal(13_000_000m, trienKhai.CostPlan);
 
         // Dòng "Tổng" ở cuối sheet (tổng cộng cả bảng) không được lẫn vào làm leaf của mục cuối cùng —
         // bug thật đã phát hiện khi chạy thử với file mẫu thật trước khi có nhánh chặn này.
         Assert.DoesNotContain(result.RootTasks, t => t.Name == "Tổng");
-        Assert.Single(trienKhai.Children);
     }
 
     private static Stream BuildSampleWorkbook()
@@ -150,9 +160,14 @@ public class EstimateImportParserTests
         SetCell(manDay, 13, 5, 5_000_000d);
         SetCell(manDay, 13, 6, 5_000_000d);
 
+        // Leaf trọn gói khác: cột G (Dự toán) để trống, số tiền thật nằm ở cột H (Ghi chú).
+        SetCell(manDay, 14, 1, "- Hỗ trợ 24/7");
+        SetCell(manDay, 14, 3, "Gói");
+        SetCell(manDay, 14, 7, 8_000_000d);
+
         // Dòng tổng cộng cuối sheet — cột A trống giống leaf nhưng KHÔNG phải là 1 task.
-        SetCell(manDay, 15, 1, "Tổng");
-        SetCell(manDay, 15, 6, 19_000_000d);
+        SetCell(manDay, 16, 1, "Tổng");
+        SetCell(manDay, 16, 6, 19_000_000d);
 
         var evaluator = workbook.GetCreationHelper().CreateFormulaEvaluator();
         evaluator.EvaluateAll();

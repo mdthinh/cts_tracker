@@ -14,7 +14,14 @@ public class FileStorageService : IFileStorageService
 
     public async Task<string> SaveAsync(string relativeFolder, string fileName, Stream content, CancellationToken ct = default)
     {
-        var dir = Path.Combine(_options.UploadsRootPath, relativeFolder);
+        // Đường dẫn tuyệt đối (vd "D:\...") dùng nguyên; đường dẫn tương đối (vd "App_Data/Uploads")
+        // luôn quy về thư mục chứa file thực thi (AppContext.BaseDirectory), không phụ thuộc
+        // working directory lúc chạy (dotnet run / IIS / click đúp exe mỗi cái 1 kiểu khác nhau).
+        var root = Path.IsPathRooted(_options.UploadsRootPath)
+            ? _options.UploadsRootPath
+            : Path.Combine(AppContext.BaseDirectory, _options.UploadsRootPath);
+
+        var dir = Path.Combine(root, relativeFolder);
         Directory.CreateDirectory(dir);
 
         var safeFileName = $"{DateTime.UtcNow:yyyyMMddHHmmss}_{Path.GetFileName(fileName)}";

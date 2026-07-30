@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
 @inject IUserProvisioningService Provisioning
+@inject IJSRuntime JS
 
 <PageTitle>Quản lý người dùng - CMC TS</PageTitle>
 
@@ -17,6 +18,11 @@
               SelectLabel="Thêm vào hệ thống"
               DisabledLabel="Đã có trong hệ thống" />
 
+@if (DeleteError is not null)
+{
+    <div class="error-box">@DeleteError</div>
+}
+
 <table class="user-table">
     <thead>
         <tr>
@@ -27,6 +33,7 @@
             <th>Vai trò</th>
             <th>Trạng thái</th>
             <th>Đồng bộ AD gần nhất</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
@@ -49,6 +56,7 @@
                     </button>
                 </td>
                 <td class="muted">@(u.LastSyncedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                <td><button type="button" class="btn-delete" @onclick="() => DeleteUserAsync(u)">Xóa</button></td>
             </tr>
         }
     </tbody>
@@ -57,6 +65,7 @@
 @code {
     private List<User> UserList { get; set; } = new();
     private HashSet<string> ExistingSamAccounts { get; set; } = new();
+    private string? DeleteError { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
@@ -107,5 +116,36 @@
         entity.IsActive = !entity.IsActive;
         await db.SaveChangesAsync();
         user.IsActive = entity.IsActive;
+    }
+
+    private async Task DeleteUserAsync(User user)
+    {
+        DeleteError = null;
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Xóa tài khoản \"{user.DisplayName}\" ({user.SamAccountName})? Không thể hoàn tác.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Users.FindAsync(user.Id);
+        if (entity is null)
+        {
+            return;
+        }
+
+        db.Users.Remove(entity);
+        try
+        {
+            await db.SaveChangesAsync();
+            await ReloadUsersAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // FK Restrict: user đang được gán làm Trưởng dự án/thành viên/phụ trách task/tác giả
+            // báo cáo... — chặn xóa cứng để không phá dữ liệu, báo rõ lý do thay vì lỗi khó hiểu.
+            DeleteError = $"Không thể xóa \"{user.DisplayName}\" vì đang được gán vào dự án/công việc nào đó. " +
+                "Gỡ khỏi các dự án/task liên quan trước, hoặc dùng nút \"Vô hiệu hóa\" thay vì xóa.";
+        }
     }
 }
