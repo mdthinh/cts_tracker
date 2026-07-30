@@ -57,19 +57,16 @@ else
             return;
         }
 
+        // Chỉ cần load hết Task của dự án vào cùng 1 DbContext — EF Core tự "fixup" quan hệ
+        // ParentTask/Children 2 chiều đã khai báo trong CmcTsDbContext, không cần tự nối cây bằng
+        // tay. Làm thêm bước tự nối (như code cũ) khiến mỗi node bị thêm vào Children 2 lần: 1 lần
+        // do EF tự fixup, 1 lần do code tự thêm — gây nhân đôi toàn bộ cây khi hiển thị (bug thật
+        // đã gặp khi test).
         var allTasks = await db.Tasks
             .Where(t => t.ProjectId == Id)
             .OrderBy(t => t.SourceRow)
             .ToListAsync();
 
-        var byId = allTasks.ToDictionary(t => t.Id);
-        foreach (var t in allTasks)
-        {
-            if (t.ParentTaskId is int parentId && byId.TryGetValue(parentId, out var parent))
-            {
-                parent.Children.Add(t);
-            }
-        }
         RootTasks = allTasks.Where(t => t.ParentTaskId is null).ToList();
     }
 }
