@@ -1,6 +1,77 @@
 @page "/"
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
 
-<PageTitle>Trang chủ - CMC TS</PageTitle>
+<PageTitle>Tổng quan - ITS INF</PageTitle>
 
-<h1>CMC TS · Theo dõi tiến độ dự án</h1>
-<p>Đăng nhập thành công. Dashboard và quản lý dự án sẽ có ở các phase tiếp theo.</p>
+<h1>Tổng quan</h1>
+
+<h2>Lịch sử báo cáo công việc</h2>
+<p class="hint">Toàn bộ báo cáo công việc từ tất cả dự án, mới nhất trước.</p>
+
+@if (Reports.Count == 0)
+{
+    <p class="hint">Chưa có báo cáo công việc nào.</p>
+}
+else
+{
+    <div class="table-scroll">
+        <table class="report-table">
+            <thead>
+                <tr>
+                    <th>Ngày báo cáo</th>
+                    <th>Người báo cáo</th>
+                    <th>Dự án</th>
+                    <th>Công việc</th>
+                    <th class="num">Tiến độ</th>
+                    <th class="num">Manday</th>
+                    <th>Ghi chú</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in Reports)
+                {
+                    <tr>
+                        <td class="nowrap">@r.ReportDate.ToString("dd/MM/yyyy")</td>
+                        <td class="nowrap">@r.ReportedByUser.DisplayName</td>
+                        <td>@r.Task.Project.Name</td>
+                        <td>@r.Task.Name</td>
+                        <td class="num">@r.ProgressPercent%</td>
+                        <td class="num">@r.MandayReported.ToString("N1")</td>
+                        <td class="note">@r.Note</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    @if (IsTruncated)
+    {
+        <p class="hint">Chỉ hiển thị @Reports.Count báo cáo gần nhất.</p>
+    }
+}
+
+@code {
+    private const int MaxRows = 200;
+
+    private List<WorkReport> Reports { get; set; } = new();
+    private bool IsTruncated;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        Reports = await db.WorkReports
+            .Include(r => r.ReportedByUser)
+            .Include(r => r.Task).ThenInclude(t => t.Project)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(MaxRows + 1)
+            .ToListAsync();
+
+        IsTruncated = Reports.Count > MaxRows;
+        if (IsTruncated)
+        {
+            Reports = Reports.Take(MaxRows).ToList();
+        }
+    }
+}

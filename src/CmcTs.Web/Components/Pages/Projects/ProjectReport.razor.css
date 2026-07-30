@@ -70,6 +70,18 @@
     accent-color: #1F3A5F;
 }
 
+.field input:disabled {
+    background: #ECEAE2;
+    color: #6B6459;
+    cursor: not-allowed;
+}
+
+.field-note {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: #6B6459;
+}
+
 .field textarea {
     min-height: 70px;
     resize: vertical;

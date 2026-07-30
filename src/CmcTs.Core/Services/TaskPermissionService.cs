@@ -62,4 +62,42 @@ public class TaskPermissionService : ITaskPermissionService
         var project = await db.Projects.FindAsync(new object?[] { projectId }, ct);
         return project?.ProjectLeadUserId == userId;
     }
+
+    public async Task<HashSet<int>> GetEditableTaskIdsAsync(int projectId, int userId, bool isGlobalAdmin, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        var allTasks = await db.Tasks.Where(t => t.ProjectId == projectId).ToListAsync(ct);
+
+        if (isGlobalAdmin)
+        {
+            return allTasks.Select(t => t.Id).ToHashSet();
+        }
+
+        var project = await db.Projects.FindAsync(new object?[] { projectId }, ct);
+        if (project?.ProjectLeadUserId == userId)
+        {
+            return allTasks.Select(t => t.Id).ToHashSet();
+        }
+
+        var editable = new HashSet<int>();
+        void AddWithDescendants(Entities.TaskItem node)
+        {
+            editable.Add(node.Id);
+            foreach (var child in node.Children)
+            {
+                AddWithDescendants(child);
+            }
+        }
+
+        // userId ở đây luôn là số thật (tham số int không nullable) nên phép so sánh với
+        // AssigneeUserId (int?) không bao giờ dính lỗi "null == null" như khi so 2 giá trị int?
+        // với nhau — đây chính xác là bug thật đã gặp ở bản trước khi 2 trang Razor tự viết tay
+        // logic này với biến CurrentUserId kiểu int?.
+        foreach (var task in allTasks.Where(t => t.AssigneeUserId == userId))
+        {
+            AddWithDescendants(task);
+        }
+
+        return editable;
+    }
 }

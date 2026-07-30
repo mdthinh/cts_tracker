@@ -86,4 +86,65 @@ public class TaskPermissionServiceTests
         Assert.False(await service.CanEditTaskAsync(level2Id, otherUserId, isGlobalAdmin: false));
         Assert.False(await service.CanEditTaskAsync(leafId, otherUserId, isGlobalAdmin: false));
     }
+
+    [Fact]
+    public async Task GetEditableTaskIds_BranchAssignee_ReturnsOwnNodePlusDescendantsOnly()
+    {
+        var (factory, projectId, _, branchAssigneeUserId, _, level1Id, level2Id, leafId) = Seed();
+        var service = new TaskPermissionService(factory);
+
+        var ids = await service.GetEditableTaskIdsAsync(projectId, branchAssigneeUserId, isGlobalAdmin: false);
+
+        Assert.Equal(new HashSet<int> { level2Id, leafId }, ids);
+        Assert.DoesNotContain(level1Id, ids);
+    }
+
+    [Fact]
+    public async Task GetEditableTaskIds_ProjectLead_ReturnsEverything()
+    {
+        var (factory, projectId, leadUserId, _, _, level1Id, level2Id, leafId) = Seed();
+        var service = new TaskPermissionService(factory);
+
+        var ids = await service.GetEditableTaskIdsAsync(projectId, leadUserId, isGlobalAdmin: false);
+
+        Assert.Equal(new HashSet<int> { level1Id, level2Id, leafId }, ids);
+    }
+
+    // Regression test cho bug thật đã gặp: khi so sánh trực tiếp 2 giá trị int? (thay vì int? với
+    // int như service này làm), "AssigneeUserId == CurrentUserId" với cả 2 đều null bị C# coi là
+    // true, khiến user không liên quan gì được cấp quyền sửa MỌI task chưa gán ai. Ở đây userId là
+    // int không nullable nên không thể dính lỗi này — test xác nhận user không liên quan luôn nhận
+    // được tập rỗng dù toàn bộ task trong dự án đều chưa gán cho ai.
+    [Fact]
+    public async Task GetEditableTaskIds_UnrelatedUser_ReturnsEmptySet_EvenWhenAllTasksUnassigned()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var factory = new TestDbContextFactory(dbName);
+        int projectId, otherUserId;
+
+        using (var db = factory.CreateDbContext())
+        {
+            var lead = new User { SamAccountName = "lead", DisplayName = "Lead", CreatedAt = DateTime.UtcNow };
+            var other = new User { SamAccountName = "other", DisplayName = "Other", CreatedAt = DateTime.UtcNow };
+            db.Users.AddRange(lead, other);
+            db.SaveChanges();
+            otherUserId = other.Id;
+
+            var project = new Project { Name = "Test", FiscalYear = "2026-2027", BusinessUnit = BusinessUnit.ENT, ProjectLeadUserId = lead.Id, CreatedByUserId = lead.Id, CreatedAt = DateTime.UtcNow };
+            db.Projects.Add(project);
+            db.SaveChanges();
+            projectId = project.Id;
+
+            // Không gán AssigneeUserId cho task nào cả — mô phỏng đúng tình huống bug thật gặp phải.
+            db.Tasks.AddRange(
+                new TaskItem { ProjectId = projectId, Level = TaskLevel.Level1, Code = "1", Name = "L1", SourceRow = 1 },
+                new TaskItem { ProjectId = projectId, Level = TaskLevel.Level2, Code = "1.1", Name = "L2", SourceRow = 2 });
+            db.SaveChanges();
+        }
+
+        var service = new TaskPermissionService(factory);
+        var ids = await service.GetEditableTaskIdsAsync(projectId, otherUserId, isGlobalAdmin: false);
+
+        Assert.Empty(ids);
+    }
 }
