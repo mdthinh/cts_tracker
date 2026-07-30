@@ -15,6 +15,7 @@ else
 {
     <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
     <h1>Báo cáo công việc — @Project.Name</h1>
+    <p class="debug-line">debug: CurrentUserId=@(CurrentUserId?.ToString() ?? "null"), IsAdmin=@IsAdmin, ReportableTasks=@ReportableTasks.Count</p>
 
     @if (ReportableTasks.Count == 0)
     {
@@ -204,6 +205,16 @@ else
         IsSubmitting = true;
         try
         {
+            // Xác thực lại quyền ngay tại lúc submit (không chỉ tin vào việc ẩn/hiện ở giao diện
+            // lúc load trang) — phòng trường hợp quyền đã đổi giữa lúc mở trang và lúc bấm gửi,
+            // hoặc client gửi thẳng 1 taskId không có trong danh sách đã hiển thị.
+            var editableIds = await PermissionService.GetEditableTaskIdsAsync(Id, CurrentUserId.Value, IsAdmin);
+            if (!editableIds.Contains(SelectedTaskId))
+            {
+                SubmitError = $"Bạn không có quyền báo cáo công việc này (taskId={SelectedTaskId}, userId={CurrentUserId}, editableCount={editableIds.Count}).";
+                return;
+            }
+
             await ProgressService.ReportWorkAsync(
                 SelectedTaskId,
                 CurrentUserId.Value,
