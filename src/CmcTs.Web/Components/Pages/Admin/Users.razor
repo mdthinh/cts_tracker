@@ -128,6 +128,17 @@
         }
 
         await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Kiểm tra trước xem user đang gắn với dự án/task nào để báo tên cụ thể, thay vì để
+        // FK Restrict chặn lúc SaveChanges rồi chỉ báo chung chung "có lỗi".
+        var usage = await DescribeUsageAsync(db, user.Id);
+        if (usage is not null)
+        {
+            DeleteError = $"Không thể xóa \"{user.DisplayName}\": {usage} Gỡ khỏi các dự án/task liên quan trước, " +
+                "hoặc dùng nút \"Vô hiệu hóa\" thay vì xóa.";
+            return;
+        }
+
         var entity = await db.Users.FindAsync(user.Id);
         if (entity is null)
         {
@@ -142,10 +153,38 @@
         }
         catch (DbUpdateException)
         {
-            // FK Restrict: user đang được gán làm Trưởng dự án/thành viên/phụ trách task/tác giả
-            // báo cáo... — chặn xóa cứng để không phá dữ liệu, báo rõ lý do thay vì lỗi khó hiểu.
-            DeleteError = $"Không thể xóa \"{user.DisplayName}\" vì đang được gán vào dự án/công việc nào đó. " +
-                "Gỡ khỏi các dự án/task liên quan trước, hoặc dùng nút \"Vô hiệu hóa\" thay vì xóa.";
+            // Phòng trường hợp có liên kết khác không kiểm tra ở DescribeUsageAsync (vd AuditLog).
+            DeleteError = $"Không thể xóa \"{user.DisplayName}\" vì vẫn đang được tham chiếu ở nơi khác trong hệ thống. " +
+                "Dùng nút \"Vô hiệu hóa\" thay vì xóa.";
         }
+    }
+
+    private static async Task<string?> DescribeUsageAsync(CmcTsDbContext db, int userId)
+    {
+        var asLead = await db.Projects.Where(p => p.ProjectLeadUserId == userId).Select(p => p.Name).ToListAsync();
+        var asCreator = await db.Projects.Where(p => p.CreatedByUserId == userId).Select(p => p.Name).ToListAsync();
+        var asMember = await db.ProjectMembers.Where(m => m.UserId == userId).Select(m => m.Project.Name).ToListAsync();
+        var taskCount = await db.Tasks.CountAsync(t => t.AssigneeUserId == userId);
+
+        var parts = new List<string>();
+        if (asLead.Count > 0)
+        {
+            parts.Add($"Trưởng dự án của: {string.Join(", ", asLead)}.");
+        }
+        if (asCreator.Count > 0)
+        {
+            parts.Add($"Người tạo dự án: {string.Join(", ", asCreator)}.");
+        }
+        var memberOnly = asMember.Except(asLead).ToList();
+        if (memberOnly.Count > 0)
+        {
+            parts.Add($"Thành viên của: {string.Join(", ", memberOnly)}.");
+        }
+        if (taskCount > 0)
+        {
+            parts.Add($"Đang được gán {taskCount} công việc.");
+        }
+
+        return parts.Count > 0 ? string.Join(" ", parts) : null;
     }
 }
