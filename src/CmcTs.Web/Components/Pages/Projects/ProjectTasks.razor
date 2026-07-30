@@ -1,8 +1,9 @@
 @page "/projects/{Id:int}/tasks"
 @rendermode InteractiveServer
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject AuthenticationStateProvider AuthProvider
 
-<PageTitle>Công việc - CMC TS</PageTitle>
+<PageTitle>Công việc - ITS INF</PageTitle>
 
 @if (Project is null)
 {
@@ -10,11 +11,16 @@
 }
 else
 {
-    <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
-    <h1>Cây công việc — @Project.Name</h1>
+    <div class="page-head">
+        <div>
+            <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
+            <h1>Cây công việc — @Project.Name</h1>
+        </div>
+        <a class="btn-secondary" href="/projects/@Id/report">Báo cáo công việc</a>
+    </div>
     <p class="hint">
-        Gán người phụ trách từng công việc sẽ có ở bước tiếp theo. Trang này hiện chỉ để xem lại
-        cây công việc đã import từ file Dự toán.
+        Chỉ Admin, Trưởng dự án, hoặc người đã được gán vào nhánh cha mới gán được người phụ trách
+        cho từng dòng bên dưới.
     </p>
 
     @if (RootTasks.Count == 0)
@@ -28,14 +34,16 @@ else
                 <tr>
                     <th>Mã</th>
                     <th>Công việc</th>
-                    <th class="num">Manday (KH)</th>
+                    <th class="num">Manday (KH/TT)</th>
                     <th class="num">Chi phí</th>
+                    <th>Tiến độ</th>
+                    <th>Phụ trách</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var root in RootTasks)
                 {
-                    <TaskTreeRow Node="root" Depth="0" />
+                    <TaskTreeRow Node="root" Depth="0" Members="Members" CanAssign="CanEditTask" OnAssigneeChanged="OnAssigneeChangedAsync" />
                 }
             </tbody>
         </table>
@@ -47,26 +55,80 @@ else
 
     private Project? Project;
     private List<TaskItem> RootTasks { get; set; } = new();
+    private List<User> Members { get; set; } = new();
+    private bool IsAdmin;
+    private int? CurrentUserId;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        IsAdmin = authState.User.IsAdmin();
+        CurrentUserId = authState.User.GetUserId();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
         await using var db = await DbFactory.CreateDbContextAsync();
-        Project = await db.Projects.FindAsync(Id);
+        Project = await db.Projects
+            .Include(p => p.Members).ThenInclude(m => m.User)
+            .SingleOrDefaultAsync(p => p.Id == Id);
         if (Project is null)
         {
             return;
         }
 
+        Members = Project.Members.Select(m => m.User).OrderBy(u => u.DisplayName).ToList();
+
         // Chỉ cần load hết Task của dự án vào cùng 1 DbContext — EF Core tự "fixup" quan hệ
         // ParentTask/Children 2 chiều đã khai báo trong CmcTsDbContext, không cần tự nối cây bằng
-        // tay. Làm thêm bước tự nối (như code cũ) khiến mỗi node bị thêm vào Children 2 lần: 1 lần
-        // do EF tự fixup, 1 lần do code tự thêm — gây nhân đôi toàn bộ cây khi hiển thị (bug thật
-        // đã gặp khi test).
+        // tay (làm vậy sẽ nhân đôi mỗi node — bug thật đã gặp và sửa trước đó).
         var allTasks = await db.Tasks
+            .Include(t => t.AssigneeUser)
             .Where(t => t.ProjectId == Id)
             .OrderBy(t => t.SourceRow)
             .ToListAsync();
 
         RootTasks = allTasks.Where(t => t.ParentTaskId is null).ToList();
+    }
+
+    // Kiểm tra ngay trong cây đã load sẵn (không query lại DB): Admin, Trưởng dự án, hoặc user
+    // đang là AssigneeUserId của chính task hoặc bất kỳ tổ tiên nào của nó.
+    private bool CanEditTask(TaskItem task)
+    {
+        if (IsAdmin)
+        {
+            return true;
+        }
+        if (CurrentUserId is not null && Project?.ProjectLeadUserId == CurrentUserId)
+        {
+            return true;
+        }
+
+        var current = task;
+        while (current is not null)
+        {
+            if (current.AssigneeUserId == CurrentUserId)
+            {
+                return true;
+            }
+            current = current.ParentTask;
+        }
+        return false;
+    }
+
+    private async Task OnAssigneeChangedAsync((TaskItem Task, int? NewAssigneeUserId) change)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.Tasks.FindAsync(change.Task.Id);
+        if (entity is null)
+        {
+            return;
+        }
+
+        entity.AssigneeUserId = change.NewAssigneeUserId;
+        await db.SaveChangesAsync();
+        await LoadAsync();
     }
 }

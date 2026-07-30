@@ -33,6 +33,9 @@ builder.Services.AddSingleton<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<IEstimateImportParser, EstimateImportParser>();
 builder.Services.AddScoped<IEstimateImportService, EstimateImportService>();
 
+builder.Services.AddScoped<ITaskPermissionService, TaskPermissionService>();
+builder.Services.AddScoped<ITaskProgressService, TaskProgressService>();
+
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

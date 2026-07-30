@@ -1,0 +1,89 @@
+using CmcTs.Core.Data;
+using CmcTs.Core.Entities;
+using CmcTs.Core.Services;
+using Microsoft.EntityFrameworkCore;
+using Xunit;
+
+namespace CmcTs.Core.Tests;
+
+public class TaskPermissionServiceTests
+{
+    private static (IDbContextFactory<CmcTsDbContext> factory, int projectId, int leadUserId,
+        int branchAssigneeUserId, int otherUserId, int level1Id, int level2Id, int leafId) Seed()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var factory = new TestDbContextFactory(dbName);
+
+        using var db = factory.CreateDbContext();
+
+        var lead = new User { SamAccountName = "lead", DisplayName = "Lead", CreatedAt = DateTime.UtcNow };
+        var branchAssignee = new User { SamAccountName = "branch", DisplayName = "Branch Assignee", CreatedAt = DateTime.UtcNow };
+        var other = new User { SamAccountName = "other", DisplayName = "Other", CreatedAt = DateTime.UtcNow };
+        db.Users.AddRange(lead, branchAssignee, other);
+        db.SaveChanges();
+
+        var project = new Project
+        {
+            Name = "Test", FiscalYear = "2026-2027", BusinessUnit = BusinessUnit.ENT,
+            ProjectLeadUserId = lead.Id, CreatedByUserId = lead.Id, CreatedAt = DateTime.UtcNow,
+        };
+        db.Projects.Add(project);
+        db.SaveChanges();
+
+        var level1 = new TaskItem { ProjectId = project.Id, Level = TaskLevel.Level1, Code = "1", Name = "L1", SourceRow = 1 };
+        db.Tasks.Add(level1);
+        db.SaveChanges();
+
+        // Level2 được gán cho branchAssignee — user này phải sửa được cả leaf con dù không gán trực tiếp.
+        var level2 = new TaskItem { ProjectId = project.Id, ParentTaskId = level1.Id, Level = TaskLevel.Level2, Code = "1.1", Name = "L2", SourceRow = 2, AssigneeUserId = branchAssignee.Id };
+        db.Tasks.Add(level2);
+        db.SaveChanges();
+
+        var leaf = new TaskItem { ProjectId = project.Id, ParentTaskId = level2.Id, Level = TaskLevel.Level3, Name = "Leaf", SourceRow = 3 };
+        db.Tasks.Add(leaf);
+        db.SaveChanges();
+
+        return (factory, project.Id, lead.Id, branchAssignee.Id, other.Id, level1.Id, level2.Id, leaf.Id);
+    }
+
+    [Fact]
+    public async Task GlobalAdmin_CanAlwaysEdit()
+    {
+        var (factory, _, _, _, otherUserId, level1Id, _, _) = Seed();
+        var service = new TaskPermissionService(factory);
+
+        Assert.True(await service.CanEditTaskAsync(level1Id, otherUserId, isGlobalAdmin: true));
+    }
+
+    [Fact]
+    public async Task ProjectLead_CanEditAnyTaskInProject()
+    {
+        var (factory, _, leadUserId, _, _, level1Id, _, leafId) = Seed();
+        var service = new TaskPermissionService(factory);
+
+        Assert.True(await service.CanEditTaskAsync(level1Id, leadUserId, isGlobalAdmin: false));
+        Assert.True(await service.CanEditTaskAsync(leafId, leadUserId, isGlobalAdmin: false));
+    }
+
+    [Fact]
+    public async Task BranchAssignee_CanEditOwnTaskAndDescendants_ButNotSiblingBranch()
+    {
+        var (factory, _, _, branchAssigneeUserId, _, level1Id, level2Id, leafId) = Seed();
+        var service = new TaskPermissionService(factory);
+
+        Assert.True(await service.CanEditTaskAsync(level2Id, branchAssigneeUserId, isGlobalAdmin: false));
+        Assert.True(await service.CanEditTaskAsync(leafId, branchAssigneeUserId, isGlobalAdmin: false)); // con của nhánh được gán
+        Assert.False(await service.CanEditTaskAsync(level1Id, branchAssigneeUserId, isGlobalAdmin: false)); // cha của nhánh được gán, không phải nhánh của mình
+    }
+
+    [Fact]
+    public async Task UnrelatedUser_CannotEdit()
+    {
+        var (factory, _, _, _, otherUserId, level1Id, level2Id, leafId) = Seed();
+        var service = new TaskPermissionService(factory);
+
+        Assert.False(await service.CanEditTaskAsync(level1Id, otherUserId, isGlobalAdmin: false));
+        Assert.False(await service.CanEditTaskAsync(level2Id, otherUserId, isGlobalAdmin: false));
+        Assert.False(await service.CanEditTaskAsync(leafId, otherUserId, isGlobalAdmin: false));
+    }
+}

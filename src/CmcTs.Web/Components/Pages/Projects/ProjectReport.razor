@@ -1,0 +1,235 @@
+@page "/projects/{Id:int}/report"
+@rendermode InteractiveServer
+@inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject ITaskProgressService ProgressService
+@inject AuthenticationStateProvider AuthProvider
+
+<PageTitle>Báo cáo công việc - ITS INF</PageTitle>
+
+@if (Project is null)
+{
+    <p>Đang tải...</p>
+}
+else
+{
+    <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
+    <h1>Báo cáo công việc — @Project.Name</h1>
+
+    @if (ReportableTasks.Count == 0)
+    {
+        <p class="hint">Bạn chưa được gán phụ trách công việc nào trong dự án này.</p>
+    }
+    else
+    {
+        <div class="report-layout">
+            <div class="card">
+                <div class="field">
+                    <label for="task">Công việc</label>
+                    <select id="task" @bind="SelectedTaskId" @bind:after="OnTaskSelected">
+                        @foreach (var t in ReportableTasks)
+                        {
+                            <option value="@t.Id">@TaskLabel(t)</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="field-row">
+                    <div class="field">
+                        <label for="date">Ngày báo cáo</label>
+                        <input id="date" type="date" @bind="ReportDate" />
+                    </div>
+                    <div class="field">
+                        <label for="manday">Manday thực hiện trong kỳ</label>
+                        <input id="manday" type="number" step="0.5" min="0" @bind="MandayReported" />
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label for="progress">Khối lượng hoàn thành của task: @ProgressPercent%</label>
+                    <input id="progress" type="range" min="0" max="100" step="5" @bind="ProgressPercent" @bind:event="oninput" />
+                </div>
+
+                <div class="field">
+                    <label for="note">Ghi chú</label>
+                    <textarea id="note" @bind="Note" placeholder="Kết quả, vướng mắc, kế hoạch tiếp theo..."></textarea>
+                </div>
+
+                @if (SubmitError is not null)
+                {
+                    <div class="error-box">@SubmitError</div>
+                }
+                @if (SubmitSuccess)
+                {
+                    <div class="success-box">Đã ghi nhận báo cáo.</div>
+                }
+
+                <button type="button" class="btn-primary" @onclick="SubmitAsync" disabled="@IsSubmitting">
+                    @(IsSubmitting ? "Đang lưu..." : "Gửi báo cáo")
+                </button>
+            </div>
+
+            <div class="card">
+                <h2>Lịch sử báo cáo gần đây</h2>
+                @if (RecentReports.Count == 0)
+                {
+                    <p class="hint">Chưa có báo cáo nào.</p>
+                }
+                else
+                {
+                    <ul class="feed">
+                        @foreach (var r in RecentReports)
+                        {
+                            <li>
+                                <div class="feed-top">
+                                    <span>@r.ReportDate.ToString("dd/MM/yyyy")</span>
+                                    <span>@r.ReportedByUser.DisplayName</span>
+                                </div>
+                                <div class="feed-body">
+                                    <strong>@r.Task.Name</strong> — @r.ProgressPercent%, +@r.MandayReported.ToString("N1") manday
+                                    @if (!string.IsNullOrWhiteSpace(r.Note))
+                                    {
+                                        <div class="feed-note">@r.Note</div>
+                                    }
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Project? Project;
+    private List<TaskItem> ReportableTasks { get; set; } = new();
+    private List<WorkReport> RecentReports { get; set; } = new();
+    private int? CurrentUserId;
+    private bool IsAdmin;
+
+    private int SelectedTaskId;
+    private DateTime ReportDate { get; set; } = DateTime.Now.Date;
+    private int ProgressPercent { get; set; } = 50;
+    private decimal MandayReported { get; set; }
+    private string Note { get; set; } = string.Empty;
+    private string? SubmitError;
+    private bool SubmitSuccess;
+    private bool IsSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        IsAdmin = authState.User.IsAdmin();
+        CurrentUserId = authState.User.GetUserId();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        Project = await db.Projects.FindAsync(Id);
+        if (Project is null)
+        {
+            return;
+        }
+
+        var allTasks = await db.Tasks
+            .Where(t => t.ProjectId == Id && t.Level != TaskLevel.Level1)
+            .OrderBy(t => t.SourceRow)
+            .ToListAsync();
+
+        ReportableTasks = allTasks.Where(CanEditTask).ToList();
+
+        if (ReportableTasks.Count > 0 && !ReportableTasks.Any(t => t.Id == SelectedTaskId))
+        {
+            SelectedTaskId = ReportableTasks[0].Id;
+            OnTaskSelected();
+        }
+
+        RecentReports = await db.WorkReports
+            .Include(r => r.Task)
+            .Include(r => r.ReportedByUser)
+            .Where(r => r.Task.ProjectId == Id)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(20)
+            .ToListAsync();
+    }
+
+    private bool CanEditTask(TaskItem task)
+    {
+        if (IsAdmin)
+        {
+            return true;
+        }
+        if (CurrentUserId is not null && Project?.ProjectLeadUserId == CurrentUserId)
+        {
+            return true;
+        }
+
+        var current = task;
+        while (current is not null)
+        {
+            if (current.AssigneeUserId == CurrentUserId)
+            {
+                return true;
+            }
+            current = current.ParentTask;
+        }
+        return false;
+    }
+
+    private static string TaskLabel(TaskItem t)
+    {
+        var prefix = t.Code is not null ? $"{t.Code} " : "- ";
+        return $"{prefix}{t.Name} ({t.MandayActual:N1}/{t.MandayPlan:N1} manday, {t.Progress}%)";
+    }
+
+    private void OnTaskSelected()
+    {
+        var task = ReportableTasks.SingleOrDefault(t => t.Id == SelectedTaskId);
+        if (task is not null)
+        {
+            ProgressPercent = task.Progress;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        SubmitError = null;
+        SubmitSuccess = false;
+
+        if (CurrentUserId is null)
+        {
+            SubmitError = "Không xác định được người dùng hiện tại, vui lòng đăng nhập lại.";
+            return;
+        }
+
+        IsSubmitting = true;
+        try
+        {
+            await ProgressService.ReportWorkAsync(
+                SelectedTaskId,
+                CurrentUserId.Value,
+                DateOnly.FromDateTime(ReportDate),
+                ProgressPercent,
+                MandayReported,
+                Note);
+
+            SubmitSuccess = true;
+            MandayReported = 0;
+            Note = string.Empty;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            SubmitError = $"Không lưu được báo cáo: {ex.Message}";
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+}

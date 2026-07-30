@@ -31,3 +31,46 @@ tr.level-2 td {
 tr.level-3 {
     background: #fff;
 }
+
+.progress-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.bar-track {
+    width: 70px;
+    height: 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    flex: none;
+}
+
+tr.level-1 .bar-track {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: currentColor;
+}
+
+.bar-pct {
+    font-size: 12px;
+    width: 32px;
+    text-align: right;
+}
+
+.muted {
+    opacity: 0.6;
+}
+
+select {
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid #DBD7CC;
+    font-size: 13px;
+}

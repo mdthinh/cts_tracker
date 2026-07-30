@@ -1,15 +1,49 @@
 <tr class="level-@((int)Node.Level)">
     <td>@Node.Code</td>
     <td><span style="padding-left:@(Depth * 18)px">@Node.Name</span></td>
-    <td class="num">@Node.MandayPlan.ToString("N1")</td>
+    <td class="num">@Node.MandayPlan.ToString("N1") / @Node.MandayActual.ToString("N1")</td>
     <td class="num">@Node.CostPlan.ToString("N0")</td>
+    <td class="progress-cell">
+        <div class="bar-track"><div class="bar-fill" style="width:@(Node.Progress)%"></div></div>
+        <span class="bar-pct">@(Node.Progress)%</span>
+    </td>
+    <td>
+        @if (Node.Level == TaskLevel.Level1)
+        {
+            <span class="muted">—</span>
+        }
+        else if (CanAssign is not null && CanAssign(Node))
+        {
+            <select value="@(Node.AssigneeUserId?.ToString() ?? "")" @onchange="OnSelectChanged">
+                <option value="">-- Chưa gán --</option>
+                @foreach (var m in Members)
+                {
+                    <option value="@m.Id">@m.DisplayName</option>
+                }
+            </select>
+        }
+        else
+        {
+            <span>@(Node.AssigneeUser?.DisplayName ?? "-")</span>
+        }
+    </td>
 </tr>
 @foreach (var child in Node.Children.OrderBy(c => c.SourceRow))
 {
-    <TaskTreeRow Node="child" Depth="Depth + 1" />
+    <TaskTreeRow Node="child" Depth="Depth + 1" Members="Members" CanAssign="CanAssign" OnAssigneeChanged="OnAssigneeChanged" />
 }
 
 @code {
     [Parameter, EditorRequired] public TaskItem Node { get; set; } = null!;
     [Parameter] public int Depth { get; set; }
+    [Parameter] public List<User> Members { get; set; } = new();
+    [Parameter] public Func<TaskItem, bool>? CanAssign { get; set; }
+    [Parameter] public EventCallback<(TaskItem Task, int? NewAssigneeUserId)> OnAssigneeChanged { get; set; }
+
+    private async Task OnSelectChanged(ChangeEventArgs e)
+    {
+        var raw = e.Value?.ToString();
+        int? newId = string.IsNullOrEmpty(raw) ? null : int.Parse(raw);
+        await OnAssigneeChanged.InvokeAsync((Node, newId));
+    }
 }
