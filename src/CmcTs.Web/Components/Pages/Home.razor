@@ -1,10 +1,86 @@
 @page "/"
 @rendermode InteractiveServer
+@inject IDashboardService DashboardService
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
 
 <PageTitle>Tổng quan - ITS INF</PageTitle>
 
 <h1>Tổng quan</h1>
+
+@if (Summary is null)
+{
+    <p>Đang tải...</p>
+}
+else
+{
+    <div class="kpi-grid">
+        <div class="kpi">
+            <div class="label">Manday lũy kế NTC @Summary.FiscalYearLabel</div>
+            <div class="value">@Summary.MandayThisFiscalYear.ToString("N1")<span class="unit">manday</span></div>
+        </div>
+        <div class="kpi">
+            <div class="label">Doanh thu quý Q@(Summary.CurrentQuarter) (@QuarterRangeLabel(Summary.CurrentQuarter))</div>
+            <div class="value">@Summary.RevenueCurrentQuarter.ToString("N0")<span class="unit">đ</span></div>
+        </div>
+        <div class="kpi">
+            <div class="label">Doanh thu lũy kế NTC @Summary.FiscalYearLabel</div>
+            <div class="value">@Summary.RevenueThisFiscalYear.ToString("N0")<span class="unit">đ</span></div>
+        </div>
+        <div class="kpi">
+            <div class="label">Dự án theo trạng thái</div>
+            <div class="status-counts">
+                <span><i class="dot dot-draft"></i>Nháp: @Summary.StatusCounts.Draft</span>
+                <span><i class="dot dot-inprogress"></i>Đang chạy: @Summary.StatusCounts.InProgress</span>
+                <span><i class="dot dot-completed"></i>Hoàn thành: @Summary.StatusCounts.Completed</span>
+            </div>
+        </div>
+    </div>
+
+    <h2>Doanh thu theo quý — NTC @Summary.FiscalYearLabel</h2>
+    <p class="hint">Chỉ tính dự án đã bấm "Đánh dấu hoàn thành", ghi nhận vào quý chứa ngày hoàn thành.</p>
+    <div class="chart-card">
+        <svg viewBox="0 0 560 190" preserveAspectRatio="xMidYMid meet">
+            <line class="axis-line" x1="8" y1="162" x2="552" y2="162" />
+            @BuildChartBars(Summary)
+        </svg>
+    </div>
+
+    <h2>Dự án (@Summary.Projects.Count)</h2>
+    <div class="table-scroll">
+        <table class="proj-table">
+            <thead>
+                <tr>
+                    <th>Dự án</th>
+                    <th>NTC</th>
+                    <th>Khối</th>
+                    <th>Trưởng dự án</th>
+                    <th>Tiến độ</th>
+                    <th class="num">Manday (TT/KH)</th>
+                    <th>Trạng thái</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in Summary.Projects)
+                {
+                    <tr @onclick="() => GoToProject(p.ProjectId)">
+                        <td class="proj-name">@p.Name</td>
+                        <td>@p.FiscalYear</td>
+                        <td>@p.BusinessUnit</td>
+                        <td>@(p.ProjectLeadName ?? "-")</td>
+                        <td>
+                            <div class="bar-row">
+                                <div class="bar-track"><div class="bar-fill" style="width:@(p.Progress)%"></div></div>
+                                <span class="bar-pct">@(p.Progress)%</span>
+                            </div>
+                        </td>
+                        <td class="num">@p.MandayActual.ToString("N1") / @p.MandayPlan.ToString("N1")</td>
+                        <td><span class="chip chip-@p.Status">@StatusLabel(p.Status)</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
 
 <h2>Lịch sử báo cáo công việc</h2>
 <p class="hint">Toàn bộ báo cáo công việc từ tất cả dự án, mới nhất trước.</p>
@@ -54,13 +130,17 @@ else
 @code {
     private const int MaxRows = 200;
 
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+
+    private DashboardSummary? Summary;
     private List<WorkReport> Reports { get; set; } = new();
     private bool IsTruncated;
 
     protected override async Task OnInitializedAsync()
     {
-        await using var db = await DbFactory.CreateDbContextAsync();
+        Summary = await DashboardService.GetSummaryAsync(DateTime.UtcNow);
 
+        await using var db = await DbFactory.CreateDbContextAsync();
         Reports = await db.WorkReports
             .Include(r => r.ReportedByUser)
             .Include(r => r.Task).ThenInclude(t => t.Project)
@@ -74,4 +154,51 @@ else
             Reports = Reports.Take(MaxRows).ToList();
         }
     }
+
+    private void GoToProject(int projectId) => Navigation.NavigateTo($"/projects/{projectId}");
+
+    // Dựng phần bar+label bằng chuỗi rồi render qua MarkupString thay vì viết trực tiếp thẻ SVG
+    // <text> trong Razor — Razor coi <text>/</text> là cú pháp riêng của nó (không nhận attribute)
+    // nên viết trực tiếp bị lỗi biên dịch bất kể hoa/thường. Toàn bộ nội dung chèn vào đây đều là
+    // số đã format hoặc chuỗi cố định, không có input người dùng nên an toàn khi render thô.
+    private static MarkupString BuildChartBars(DashboardSummary summary)
+    {
+        var maxRevenue = summary.QuarterlyRevenue.Count > 0 ? summary.QuarterlyRevenue.Max(q => q.Amount) : 0m;
+        var chartMax = maxRevenue > 0 ? maxRevenue * 1.2m : 1m;
+        var groupWidth = 544d / 4;
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var q in summary.QuarterlyRevenue)
+        {
+            var cx = 8 + groupWidth * (q.Quarter - 1) + groupWidth / 2;
+            var barHeight = chartMax > 0 ? (double)(q.Amount / chartMax) * 132 : 0;
+            var y = 162 - barHeight;
+            var isCurrent = q.Quarter == summary.CurrentQuarter;
+            var barClass = isCurrent ? "bar-current" : "bar";
+            var quarterLabel = $"Q{q.Quarter}{(isCurrent ? " • hiện tại" : "")} ({QuarterRangeLabel(q.Quarter)})";
+
+            sb.Append($"<rect class=\"{barClass}\" x=\"{cx - 32:F1}\" y=\"{y:F1}\" width=\"64\" height=\"{Math.Max(barHeight, 1):F1}\" rx=\"4\" />");
+            sb.Append($"<text class=\"val-label\" x=\"{cx:F1}\" y=\"{y - 8:F1}\" text-anchor=\"middle\">{q.Amount:N0}</text>");
+            sb.Append($"<text class=\"axis-label\" x=\"{cx:F1}\" y=\"178\" text-anchor=\"middle\">{quarterLabel}</text>");
+        }
+
+        return new MarkupString(sb.ToString());
+    }
+
+    private static string QuarterRangeLabel(int quarter) => quarter switch
+    {
+        1 => "T4-T6",
+        2 => "T7-T9",
+        3 => "T10-T12",
+        4 => "T1-T3",
+        _ => "",
+    };
+
+    private static string StatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Draft => "Nháp",
+        ProjectStatus.InProgress => "Đang triển khai",
+        ProjectStatus.Completed => "Hoàn thành",
+        _ => status.ToString(),
+    };
 }

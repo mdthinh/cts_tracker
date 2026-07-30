@@ -3,6 +3,206 @@
     font-size: 13.5px;
 }
 
+/* ---------- KPI ---------- */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 16px 0 8px;
+}
+
+@media (max-width: 900px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.kpi {
+    background: #fff;
+    border: 1px solid #DBD7CC;
+    border-radius: 10px;
+    padding: 14px 16px;
+}
+
+.kpi .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6B6459;
+}
+
+.kpi .value {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 22px;
+    font-weight: 700;
+    margin-top: 6px;
+    color: #16212B;
+}
+
+.kpi .unit {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6B6459;
+    margin-left: 4px;
+}
+
+.status-counts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12.5px;
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.dot-draft { background: #6B6459; }
+.dot-inprogress { background: #1F3A5F; }
+.dot-completed { background: #2E7D4F; }
+
+/* ---------- Chart ---------- */
+.chart-card {
+    background: #fff;
+    border: 1px solid #DBD7CC;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 8px;
+}
+
+.chart-card svg {
+    width: 100%;
+    height: 190px;
+    display: block;
+}
+
+.axis-line {
+    stroke: #DBD7CC;
+    stroke-width: 1;
+}
+
+.bar {
+    fill: #1F3A5F;
+    opacity: 0.45;
+}
+
+.bar-current {
+    fill: #1F3A5F;
+}
+
+.val-label {
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 600;
+    fill: #16212B;
+}
+
+.axis-label {
+    font-size: 10.5px;
+    fill: #6B6459;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+/* ---------- Projects table ---------- */
+.proj-table {
+    width: 100%;
+    min-width: 820px;
+    border-collapse: collapse;
+}
+
+.proj-table th {
+    text-align: left;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6B6459;
+    padding: 0 10px 8px;
+    border-bottom: 1px solid #DBD7CC;
+}
+
+.proj-table td {
+    padding: 10px;
+    border-bottom: 1px solid #DBD7CC;
+    font-size: 13.5px;
+}
+
+.proj-table tbody tr {
+    cursor: pointer;
+}
+
+.proj-table tbody tr:hover {
+    background: #F5F4EF;
+}
+
+.proj-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.proj-name {
+    font-weight: 600;
+}
+
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bar-track {
+    width: 80px;
+    height: 6px;
+    border-radius: 4px;
+    background: #ECEAE2;
+    overflow: hidden;
+    flex: none;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: #1F3A5F;
+}
+
+.bar-pct {
+    font-size: 12px;
+    width: 32px;
+    text-align: right;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.chip-Draft {
+    background: #ECEAE2;
+    color: #6B6459;
+}
+
+.chip-InProgress {
+    background: #E4EAF1;
+    color: #1F3A5F;
+}
+
+.chip-Completed {
+    background: #E3F1E8;
+    color: #2E7D4F;
+}
+
 .table-scroll {
     overflow-x: auto;
     margin-top: 12px;
