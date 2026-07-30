@@ -10,7 +10,7 @@ public class CmcTsDbContextFactory : IDesignTimeDbContextFactory<CmcTsDbContext>
     public CmcTsDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<CmcTsDbContext>();
-        optionsBuilder.UseSqlServer("Server=localhost;Database=CmcTsTracker;Trusted_Connection=True;TrustServerCertificate=True;");
+        optionsBuilder.UseSqlServer("Server=tcp:localhost\\SQLEXPRESS;Database=CmcTsTracker;Trusted_Connection=True;TrustServerCertificate=True;");
         return new CmcTsDbContext(optionsBuilder.Options);
     }
 }
