@@ -15,7 +15,6 @@ else
 {
     <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
     <h1>Báo cáo công việc — @Project.Name</h1>
-    <p class="debug-line">debug: CurrentUserId=@(CurrentUserId?.ToString() ?? "null"), IsAdmin=@IsAdmin, ReportableTasks=@ReportableTasks.Count</p>
 
     @if (ReportableTasks.Count == 0)
     {
