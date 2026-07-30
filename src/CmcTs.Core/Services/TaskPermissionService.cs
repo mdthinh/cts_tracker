@@ -1,4 +1,5 @@
 using CmcTs.Core.Data;
+using CmcTs.Core.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace CmcTs.Core.Services;
@@ -28,7 +29,12 @@ public class TaskPermissionService : ITaskPermissionService
         }
 
         var project = await db.Projects.FindAsync(new object?[] { task.ProjectId }, ct);
-        if (project?.ProjectLeadUserId == userId)
+        if (project is null || IsLockedForNonAdmin(project))
+        {
+            return false;
+        }
+
+        if (project.ProjectLeadUserId == userId)
         {
             return true;
         }
@@ -60,7 +66,12 @@ public class TaskPermissionService : ITaskPermissionService
 
         await using var db = await _dbFactory.CreateDbContextAsync(ct);
         var project = await db.Projects.FindAsync(new object?[] { projectId }, ct);
-        return project?.ProjectLeadUserId == userId;
+        if (project is null || IsLockedForNonAdmin(project))
+        {
+            return false;
+        }
+
+        return project.ProjectLeadUserId == userId;
     }
 
     public async Task<HashSet<int>> GetEditableTaskIdsAsync(int projectId, int userId, bool isGlobalAdmin, CancellationToken ct = default)
@@ -74,13 +85,18 @@ public class TaskPermissionService : ITaskPermissionService
         }
 
         var project = await db.Projects.FindAsync(new object?[] { projectId }, ct);
-        if (project?.ProjectLeadUserId == userId)
+        if (project is null || IsLockedForNonAdmin(project))
+        {
+            return new HashSet<int>();
+        }
+
+        if (project.ProjectLeadUserId == userId)
         {
             return allTasks.Select(t => t.Id).ToHashSet();
         }
 
         var editable = new HashSet<int>();
-        void AddWithDescendants(Entities.TaskItem node)
+        void AddWithDescendants(TaskItem node)
         {
             editable.Add(node.Id);
             foreach (var child in node.Children)
@@ -100,4 +116,8 @@ public class TaskPermissionService : ITaskPermissionService
 
         return editable;
     }
+
+    // Dự án đã "Hoàn thành" thì khóa sửa với tất cả trừ Admin (đảm bảo doanh thu đã chốt không bị
+    // đổi ngầm sau khi ghi nhận vào quý tài chính).
+    private static bool IsLockedForNonAdmin(Project project) => project.Status == ProjectStatus.Completed;
 }

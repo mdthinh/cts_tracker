@@ -35,6 +35,7 @@ builder.Services.AddScoped<IEstimateImportService, EstimateImportService>();
 
 builder.Services.AddScoped<ITaskPermissionService, TaskPermissionService>();
 builder.Services.AddScoped<ITaskProgressService, TaskProgressService>();
+builder.Services.AddScoped<IProjectCompletionService, ProjectCompletionService>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

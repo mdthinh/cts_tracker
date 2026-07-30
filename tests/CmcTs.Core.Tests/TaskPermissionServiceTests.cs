@@ -147,4 +147,29 @@ public class TaskPermissionServiceTests
 
         Assert.Empty(ids);
     }
+
+    [Fact]
+    public async Task CompletedProject_LocksEditingForProjectLead_ButNotForAdmin()
+    {
+        var (factory, projectId, leadUserId, _, otherUserId, level1Id, _, leafId) = Seed();
+
+        using (var db = factory.CreateDbContext())
+        {
+            var project = db.Projects.Single(p => p.Id == projectId);
+            project.Status = ProjectStatus.Completed;
+            project.CompletedAt = DateTime.UtcNow;
+            project.CompletedByUserId = leadUserId;
+            db.SaveChanges();
+        }
+
+        var service = new TaskPermissionService(factory);
+
+        Assert.False(await service.CanEditProjectAsync(projectId, leadUserId, isGlobalAdmin: false));
+        Assert.False(await service.CanEditTaskAsync(leafId, leadUserId, isGlobalAdmin: false));
+        Assert.Empty(await service.GetEditableTaskIdsAsync(projectId, leadUserId, isGlobalAdmin: false));
+
+        // Admin vẫn sửa được bình thường dù dự án đã hoàn thành.
+        Assert.True(await service.CanEditProjectAsync(projectId, otherUserId, isGlobalAdmin: true));
+        Assert.True(await service.CanEditTaskAsync(level1Id, otherUserId, isGlobalAdmin: true));
+    }
 }

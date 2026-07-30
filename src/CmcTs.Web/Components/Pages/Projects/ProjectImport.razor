@@ -4,10 +4,11 @@
 @inject IEstimateImportParser Parser
 @inject IEstimateImportService ImportService
 @inject IFileStorageService Storage
+@inject ITaskPermissionService PermissionService
 @inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Navigation
 
-<PageTitle>Upload Dự toán - CMC TS</PageTitle>
+<PageTitle>Upload Dự toán - ITS INF</PageTitle>
 
 @if (Project is null)
 {
@@ -141,6 +142,7 @@ else
     {
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         var userId = authState.User.GetUserId();
+        var isAdmin = authState.User.IsAdmin();
 
         await using var db = await DbFactory.CreateDbContextAsync();
         Project = await db.Projects.FindAsync(Id);
@@ -149,7 +151,7 @@ else
             return;
         }
 
-        CanImport = authState.User.IsAdmin() || (userId is not null && Project.ProjectLeadUserId == userId);
+        CanImport = await PermissionService.CanEditProjectAsync(Id, userId ?? -1, isAdmin);
     }
 
     private async Task OnFileSelectedAsync(InputFileChangeEventArgs e)

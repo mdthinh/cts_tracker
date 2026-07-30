@@ -2,10 +2,13 @@
 @rendermode InteractiveServer
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
 @inject IUserProvisioningService Provisioning
+@inject ITaskPermissionService PermissionService
+@inject IProjectCompletionService CompletionService
 @inject AuthenticationStateProvider AuthProvider
+@inject IJSRuntime JS
 @inject NavigationManager Navigation
 
-<PageTitle>@(Project?.Name ?? "Dự án") - CMC TS</PageTitle>
+<PageTitle>@(Project?.Name ?? "Dự án") - ITS INF</PageTitle>
 
 @if (Project is null)
 {
@@ -18,17 +21,23 @@ else
             <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
             <h1>@Project.Name</h1>
         </div>
-        @if (CanEdit && !EditMode)
-        {
-            <button type="button" class="btn-primary" @onclick="StartEdit">Chỉnh sửa</button>
-        }
+        <div class="head-actions">
+            @if (CanEdit && !EditMode)
+            {
+                <button type="button" class="btn-primary" @onclick="StartEdit">Chỉnh sửa</button>
+            }
+            @if (CanEdit && Project.Status != ProjectStatus.Completed)
+            {
+                <button type="button" class="btn-complete" @onclick="CompleteProjectAsync">Đánh dấu hoàn thành</button>
+            }
+        </div>
     </div>
 
     @if (!EditMode)
     {
         <div class="view-grid">
             <div class="view-field"><span class="label">Trưởng dự án</span><span>@(Project.ProjectLead?.DisplayName ?? "-")</span></div>
-            <div class="view-field"><span class="label">Trạng thái</span><span>@StatusLabel(Project.Status)</span></div>
+            <div class="view-field"><span class="label">Trạng thái</span><span class="chip chip-@Project.Status">@StatusLabel(Project.Status)</span></div>
             <div class="view-field"><span class="label">Công nghệ liên quan</span>
                 <span>
                     @if (Project.ProjectTechnologies.Count == 0)
@@ -42,6 +51,21 @@ else
                 </span>
             </div>
         </div>
+
+        @if (Project.Status == ProjectStatus.Completed && Project.CompletedAt is not null)
+        {
+            <div class="completed-box">
+                Đã hoàn thành ngày @Project.CompletedAt.Value.ToLocalTime().ToString("dd/MM/yyyy")
+                bởi @(Project.CompletedByUser?.DisplayName ?? "-") —
+                doanh thu @(Project.RevenueAmount?.ToString("N0") ?? "0") đ đã ghi nhận vào
+                @CompletedQuarterLabel. Dự án đã khóa sửa (trừ Admin).
+            </div>
+        }
+
+        @if (CompleteError is not null)
+        {
+            <div class="error-box">@CompleteError</div>
+        }
 
         <h2>Thành viên (@Project.Members.Count)</h2>
         <ul class="member-view-list">
@@ -177,11 +201,19 @@ else
     private string EditProjectLeadUserId { get; set; } = string.Empty;
     private string NewTechName { get; set; } = string.Empty;
     private string? SaveError { get; set; }
+    private string? CompleteError { get; set; }
+    private bool IsAdmin { get; set; }
+
+    private string CompletedQuarterLabel =>
+        Project?.CompletedAt is { } completedAt
+            ? $"Q{CmcTs.Core.FiscalYear.GetQuarter(completedAt.ToLocalTime())} NTC {CmcTs.Core.FiscalYear.GetLabel(completedAt.ToLocalTime())}"
+            : "-";
 
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthProvider.GetAuthenticationStateAsync();
         CurrentUserId = authState.User.GetUserId();
+        IsAdmin = authState.User.IsAdmin();
 
         await using var db = await DbFactory.CreateDbContextAsync();
         Technologies = await db.Technologies.Where(t => t.IsActive).OrderBy(t => t.Name).ToListAsync();
@@ -194,6 +226,7 @@ else
         await using var db = await DbFactory.CreateDbContextAsync();
         Project = await db.Projects
             .Include(p => p.ProjectLead)
+            .Include(p => p.CompletedByUser)
             .Include(p => p.Members).ThenInclude(m => m.User)
             .Include(p => p.ProjectTechnologies).ThenInclude(pt => pt.Technology)
             .SingleOrDefaultAsync(p => p.Id == Id);
@@ -203,8 +236,40 @@ else
             return;
         }
 
-        CanEdit = user.IsAdmin() || (CurrentUserId is not null && Project.ProjectLeadUserId == CurrentUserId);
+        // Dùng service dùng chung (có test) — tự khóa khi Project.Status == Completed, chỉ Admin
+        // vẫn sửa được. Không tự viết tay lại "IsAdmin || ProjectLeadUserId == CurrentUserId" ở
+        // đây để tránh lặp lại đúng kiểu bug đã gặp (so sánh int? thủ công) và để thừa hưởng luật
+        // khóa dự án hoàn thành mà không cần sửa gì thêm.
+        CanEdit = await PermissionService.CanEditProjectAsync(Id, CurrentUserId ?? -1, IsAdmin);
         TaskCount = await db.Tasks.CountAsync(t => t.ProjectId == Id && t.Level == TaskLevel.Level3);
+    }
+
+    private async Task CompleteProjectAsync()
+    {
+        CompleteError = null;
+        if (Project is null || CurrentUserId is null)
+        {
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm",
+            $"Đánh dấu dự án \"{Project.Name}\" đã hoàn thành? Doanh thu {Project.RevenueAmount?.ToString("N0") ?? "0"} đ " +
+            "sẽ được ghi nhận vào quý tài chính hiện tại và dự án sẽ bị khóa sửa (trừ Admin). Không thể hoàn tác.");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            await CompletionService.CompleteProjectAsync(Id, CurrentUserId.Value);
+            var authState = await AuthProvider.GetAuthenticationStateAsync();
+            await ReloadAsync(authState.User);
+        }
+        catch (Exception ex)
+        {
+            CompleteError = $"Không đánh dấu hoàn thành được: {ex.Message}";
+        }
     }
 
     private void StartEdit()
