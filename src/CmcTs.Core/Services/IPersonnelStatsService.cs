@@ -7,4 +7,8 @@ public interface IPersonnelStatsService
 
     // Lọc lại từ GetAllAsync — chỉ đúng 1 người, dùng cho dashboard cá nhân của non-admin.
     Task<List<PersonnelQuarterStat>> GetForUserAsync(int userId, CancellationToken ct = default);
+
+    // Truy vết chi tiết: đúng 1 người, liệt kê từng dự án + từng task người đó đã báo cáo, kèm
+    // doanh thu quy đổi ở cấp dự án — trả lời "manday/doanh thu này lấy từ đâu".
+    Task<List<PersonnelProjectContribution>> GetContributionsForUserAsync(int userId, CancellationToken ct = default);
 }

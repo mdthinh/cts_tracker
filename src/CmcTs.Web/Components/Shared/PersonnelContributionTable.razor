@@ -1,0 +1,81 @@
+@if (Contributions.Count == 0)
+{
+    <p class="hint">Chưa có báo cáo công việc nào.</p>
+}
+else
+{
+    <div class="contribution-filter">
+        <input type="text" placeholder="Lọc theo MVV..." @bind="FilterMvv" @bind:event="oninput" />
+        @if (!string.IsNullOrWhiteSpace(FilterMvv))
+        {
+            <button type="button" class="btn-clear-filter" @onclick="() => FilterMvv = string.Empty">Xóa lọc</button>
+        }
+    </div>
+
+    @if (FilteredContributions.Count == 0)
+    {
+        <p class="hint">Không có dự án nào khớp MVV đã lọc.</p>
+    }
+    else
+    {
+        @foreach (var p in FilteredContributions)
+        {
+            <div class="contribution-project">
+                <div class="contribution-project-head">
+                    <div class="contribution-project-title">
+                        <span class="contribution-mvv">MVV @(p.ProjectCaseCode ?? "-")</span>
+                        <strong>@p.ProjectName</strong>
+                        <span class="chip chip-@p.ProjectStatus">@StatusLabel(p.ProjectStatus)</span>
+                    </div>
+                    <div class="contribution-totals">
+                        <span>@p.Manday.ToString("N1") manday</span>
+                        @if (p.ProjectStatus == ProjectStatus.Completed)
+                        {
+                            <span>@p.RevenueAttributed.ToString("N0") đ (ước tính)</span>
+                        }
+                        else
+                        {
+                            <span class="muted">Chưa hoàn thành — chưa quy đổi doanh thu</span>
+                        }
+                    </div>
+                </div>
+                <table class="contribution-task-table">
+                    <thead>
+                        <tr>
+                            <th>Công việc đã báo cáo</th>
+                            <th class="num">Manday</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in p.Tasks)
+                        {
+                            <tr>
+                                <td>@t.TaskName</td>
+                                <td class="num">@t.Manday.ToString("N1")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public List<PersonnelProjectContribution> Contributions { get; set; } = new();
+
+    private string FilterMvv { get; set; } = string.Empty;
+
+    private List<PersonnelProjectContribution> FilteredContributions =>
+        Contributions.Where(p => string.IsNullOrWhiteSpace(FilterMvv) || (p.ProjectCaseCode ?? string.Empty).Contains(FilterMvv, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    private static string StatusLabel(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Draft => "Nháp",
+        ProjectStatus.OnTrack => "Đúng tiến độ",
+        ProjectStatus.AtRisk => "Rủi ro",
+        ProjectStatus.Delayed => "Trễ hạn",
+        ProjectStatus.Completed => "Hoàn thành",
+        _ => status.ToString(),
+    };
+}

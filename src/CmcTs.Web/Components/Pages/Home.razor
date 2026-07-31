@@ -1,6 +1,7 @@
 @page "/"
 @rendermode InteractiveServer
 @inject IDashboardService DashboardService
+@inject IPersonnelStatsService PersonnelStatsService
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
 @inject AuthenticationStateProvider AuthProvider
 @inject IJSRuntime JS
@@ -38,6 +39,14 @@ else
             <div class="foot">Nháp: <b>@Summary.StatusCounts.Draft</b> &middot; Hoàn thành: <b>@Summary.StatusCounts.Completed</b></div>
         </div>
     </div>
+
+    @if (!IsAdmin)
+    {
+        <details class="card contribution-details">
+            <summary>Manday/doanh thu ở trên lấy từ dự án nào, task nào? Bấm để xem chi tiết</summary>
+            <PersonnelContributionTable Contributions="MyContributions" />
+        </details>
+    }
 
     <div class="row-2col">
         <div class="card">
@@ -175,6 +184,7 @@ else
     private bool IsTruncated;
     private bool IsAdmin;
     private int? CurrentUserId;
+    private List<PersonnelProjectContribution> MyContributions { get; set; } = new();
 
     private int AverageProgress =>
         Summary is null || Summary.Projects.Count == 0
@@ -194,6 +204,11 @@ else
         // CanViewProjectAsync, tránh 3 nơi tự định nghĩa 3 kiểu phạm vi khác nhau.
         var scopeToUserId = IsAdmin ? (int?)null : (CurrentUserId ?? -1);
         Summary = await DashboardService.GetSummaryAsync(DateTime.UtcNow, scopeToUserId);
+
+        if (!IsAdmin)
+        {
+            MyContributions = await PersonnelStatsService.GetContributionsForUserAsync(CurrentUserId ?? -1);
+        }
 
         await using var db = await DbFactory.CreateDbContextAsync();
         var reportsQuery = db.WorkReports

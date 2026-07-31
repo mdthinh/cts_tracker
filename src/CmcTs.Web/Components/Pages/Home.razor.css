@@ -115,6 +115,17 @@
 .dot-delayed { background: #AE3B35; }
 .dot-completed { background: #2E7D4F; }
 
+.contribution-details summary {
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #1F3A5F;
+}
+
+.contribution-details[open] summary {
+    margin-bottom: 14px;
+}
+
 /* ---------- Row: chart + ring ---------- */
 .row-2col {
     display: grid;

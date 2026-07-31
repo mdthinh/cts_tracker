@@ -20,7 +20,7 @@
 else
 {
     <div class="filter-row">
-        <select @bind="FilterUserId">
+        <select @bind="FilterUserId" @bind:after="OnPersonFilterChangedAsync">
             <option value="">-- Nhân sự: Tất cả --</option>
             @foreach (var u in PersonOptions)
             {
@@ -79,10 +79,18 @@ else
             </tfoot>
         </table>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(FilterUserId))
+    {
+        <h2>Chi tiết nguồn manday/doanh thu — @PersonOptions.SingleOrDefault(p => p.UserId.ToString() == FilterUserId).DisplayName</h2>
+        <p class="hint">Liệt kê đúng dự án, đúng task người này đã báo cáo — không lọc theo quý/NTC ở trên.</p>
+        <PersonnelContributionTable Contributions="SelectedPersonContributions" />
+    }
 }
 
 @code {
     private List<PersonnelQuarterStat> Stats { get; set; } = new();
+    private List<PersonnelProjectContribution> SelectedPersonContributions { get; set; } = new();
 
     private string FilterUserId { get; set; } = string.Empty;
     private string FilterFiscalYear { get; set; } = string.Empty;
@@ -103,11 +111,19 @@ else
         (string.IsNullOrWhiteSpace(FilterQuarter) || s.Quarter.ToString() == FilterQuarter))
         .ToList();
 
-    private void ClearFilters()
+    private async Task ClearFilters()
     {
         FilterUserId = string.Empty;
         FilterFiscalYear = string.Empty;
         FilterQuarter = string.Empty;
+        await OnPersonFilterChangedAsync();
+    }
+
+    private async Task OnPersonFilterChangedAsync()
+    {
+        SelectedPersonContributions = int.TryParse(FilterUserId, out var userId)
+            ? await StatsService.GetContributionsForUserAsync(userId)
+            : new List<PersonnelProjectContribution>();
     }
 
     protected override async Task OnInitializedAsync()

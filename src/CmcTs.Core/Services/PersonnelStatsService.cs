@@ -85,4 +85,54 @@ public class PersonnelStatsService : IPersonnelStatsService
         var all = await GetAllAsync(ct);
         return all.Where(s => s.UserId == userId).ToList();
     }
+
+    public async Task<List<PersonnelProjectContribution>> GetContributionsForUserAsync(int userId, CancellationToken ct = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+
+        var userReports = await db.WorkReports
+            .Where(r => r.ReportedByUserId == userId)
+            .Include(r => r.Task).ThenInclude(t => t.Project)
+            .ToListAsync(ct);
+
+        var result = new List<PersonnelProjectContribution>();
+
+        foreach (var projectGroup in userReports.GroupBy(r => r.Task.Project))
+        {
+            var project = projectGroup.Key;
+
+            var tasks = projectGroup
+                .GroupBy(r => r.Task)
+                .Select(g => new PersonnelTaskContribution(g.Key.Id, g.Key.Name, g.Sum(r => r.MandayReported)))
+                .OrderByDescending(t => t.Manday)
+                .ToList();
+
+            var userManday = tasks.Sum(t => t.Manday);
+            var revenue = 0m;
+
+            if (project.Status == ProjectStatus.Completed && project.RevenueAmount is decimal amount)
+            {
+                // Tổng manday của TOÀN dự án (mọi người báo cáo, không chỉ userId) để tính đúng tỷ
+                // trọng — userReports ở trên chỉ chứa báo cáo của riêng người này nên phải query
+                // riêng, không suy ra được từ dữ liệu đã tải.
+                var totalProjectManday = await db.WorkReports
+                    .Where(r => r.Task.ProjectId == project.Id)
+                    .SumAsync(r => (decimal?)r.MandayReported, ct) ?? 0m;
+
+                if (totalProjectManday > 0)
+                {
+                    revenue = amount * (userManday / totalProjectManday);
+                }
+            }
+
+            result.Add(new PersonnelProjectContribution(
+                project.Id, project.Name, project.CaseCode, project.Status,
+                userManday, revenue, tasks));
+        }
+
+        return result
+            .OrderByDescending(p => p.RevenueAttributed)
+            .ThenByDescending(p => p.Manday)
+            .ToList();
+    }
 }
