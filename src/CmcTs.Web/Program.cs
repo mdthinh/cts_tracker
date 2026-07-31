@@ -36,6 +36,7 @@ builder.Services.AddScoped<IEstimateImportService, EstimateImportService>();
 builder.Services.AddScoped<ITaskPermissionService, TaskPermissionService>();
 builder.Services.AddScoped<ITaskProgressService, TaskProgressService>();
 builder.Services.AddScoped<IProjectCompletionService, ProjectCompletionService>();
+builder.Services.AddScoped<IProjectStatusService, ProjectStatusService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IProjectDocumentService, ProjectDocumentService>();
 

@@ -23,7 +23,7 @@ public class ProjectCompletionServiceTests
             var project = new Project
             {
                 Name = "Test", FiscalYear = "2026-2027", BusinessUnit = BusinessUnit.ENT,
-                Status = ProjectStatus.InProgress, RevenueAmount = 786_480_000m,
+                Status = ProjectStatus.OnTrack, RevenueAmount = 786_480_000m,
                 CreatedByUserId = admin.Id, CreatedAt = DateTime.UtcNow,
             };
             db.Projects.Add(project);
@@ -43,7 +43,7 @@ public class ProjectCompletionServiceTests
 
         var audit = await verifyDb.AuditLogs.SingleAsync(a => a.EntityType == nameof(Project) && a.EntityId == projectId);
         Assert.Equal(nameof(Project.Status), audit.FieldName);
-        Assert.Equal(nameof(ProjectStatus.InProgress), audit.OldValue);
+        Assert.Equal(nameof(ProjectStatus.OnTrack), audit.OldValue);
         Assert.Equal(nameof(ProjectStatus.Completed), audit.NewValue);
         Assert.Equal(adminUserId, audit.ChangedByUserId);
     }

@@ -70,9 +70,19 @@
     color: #6B6459;
 }
 
-.chip-InProgress {
+.chip-OnTrack {
     background: #E4EAF1;
     color: #1F3A5F;
+}
+
+.chip-AtRisk {
+    background: #FBEBD2;
+    color: #92600F;
+}
+
+.chip-Delayed {
+    background: #F5E1DF;
+    color: #AE3B35;
 }
 
 .chip-Completed {

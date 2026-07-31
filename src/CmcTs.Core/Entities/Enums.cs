@@ -15,11 +15,16 @@ public enum BusinessUnit
     ITS = 4,
 }
 
+// Giá trị số cố định để không cần migrate dữ liệu cũ (lưu int trong DB) — OnTrack giữ nguyên giá
+// trị 1 vốn là "InProgress" trước đây (đổi tên, không đổi số); AtRisk/Delayed là 2 trạng thái mới
+// thêm, đặt số sau Completed để không xáo trộn thứ tự cũ.
 public enum ProjectStatus
 {
     Draft = 0,
-    InProgress = 1,
+    OnTrack = 1,
     Completed = 2,
+    AtRisk = 3,
+    Delayed = 4,
 }
 
 public enum TaskLevel

@@ -15,19 +15,19 @@
 else
 {
     <div class="kpi-grid">
-        <div class="kpi">
+        <div class="kpi kpi-manday">
             <div class="label">Manday lũy kế NTC @Summary.FiscalYearLabel</div>
             <div class="value">@Summary.MandayThisFiscalYear.ToString("N1")<span class="unit">manday</span></div>
         </div>
-        <div class="kpi">
+        <div class="kpi kpi-revenue-quarter">
             <div class="label">Doanh thu quý Q@(Summary.CurrentQuarter) (@QuarterRangeLabel(Summary.CurrentQuarter))</div>
             <div class="value">@Summary.RevenueCurrentQuarter.ToString("N0")<span class="unit">đ</span></div>
         </div>
-        <div class="kpi">
+        <div class="kpi kpi-revenue-fy">
             <div class="label">Doanh thu lũy kế NTC @Summary.FiscalYearLabel</div>
             <div class="value">@Summary.RevenueThisFiscalYear.ToString("N0")<span class="unit">đ</span></div>
         </div>
-        <div class="kpi">
+        <div class="kpi kpi-active">
             <div class="label">Dự án đang triển khai</div>
             <div class="value">@Summary.StatusCounts.InProgress<span class="unit">dự án</span></div>
             <div class="foot">Nháp: <b>@Summary.StatusCounts.Draft</b> &middot; Hoàn thành: <b>@Summary.StatusCounts.Completed</b></div>
@@ -56,7 +56,9 @@ else
                 <div class="ring" style="--pct:@AverageProgress"><div class="hole"><span class="ring-n">@AverageProgress%</span><span class="ring-s">hoàn thành</span></div></div>
                 <div class="ring-stats">
                     <div><span class="dot dot-draft"></span>Nháp: <b>@Summary.StatusCounts.Draft</b></div>
-                    <div><span class="dot dot-inprogress"></span>Đang triển khai: <b>@Summary.StatusCounts.InProgress</b></div>
+                    <div><span class="dot dot-ontrack"></span>Đúng tiến độ: <b>@Summary.StatusCounts.OnTrack</b></div>
+                    <div><span class="dot dot-atrisk"></span>Rủi ro: <b>@Summary.StatusCounts.AtRisk</b></div>
+                    <div><span class="dot dot-delayed"></span>Trễ hạn: <b>@Summary.StatusCounts.Delayed</b></div>
                     <div><span class="dot dot-completed"></span>Hoàn thành: <b>@Summary.StatusCounts.Completed</b></div>
                 </div>
             </div>
@@ -232,7 +234,9 @@ else
     private static string StatusLabel(ProjectStatus status) => status switch
     {
         ProjectStatus.Draft => "Nháp",
-        ProjectStatus.InProgress => "Đang triển khai",
+        ProjectStatus.OnTrack => "Đúng tiến độ",
+        ProjectStatus.AtRisk => "Rủi ro",
+        ProjectStatus.Delayed => "Trễ hạn",
         ProjectStatus.Completed => "Hoàn thành",
         _ => status.ToString(),
     };

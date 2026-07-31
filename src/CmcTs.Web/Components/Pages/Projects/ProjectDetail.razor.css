@@ -104,14 +104,34 @@
     color: #6B6459;
 }
 
-.chip-InProgress {
+.chip-OnTrack {
     background: #E4EAF1;
     color: #1F3A5F;
+}
+
+.chip-AtRisk {
+    background: #FBEBD2;
+    color: #92600F;
+}
+
+.chip-Delayed {
+    background: #F5E1DF;
+    color: #AE3B35;
 }
 
 .chip-Completed {
     background: #E3F1E8;
     color: #2E7D4F;
+}
+
+.status-select {
+    margin-top: 2px;
+    padding: 5px 9px;
+    border: 1px solid #DBD7CC;
+    border-radius: 7px;
+    font-size: 13px;
+    background: #fff;
+    max-width: fit-content;
 }
 
 .field {

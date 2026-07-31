@@ -4,6 +4,7 @@
 @inject IUserProvisioningService Provisioning
 @inject ITaskPermissionService PermissionService
 @inject IProjectCompletionService CompletionService
+@inject IProjectStatusService StatusService
 @inject IProjectDocumentService DocumentService
 @inject IFileStorageService Storage
 @inject AuthenticationStateProvider AuthProvider
@@ -39,7 +40,26 @@ else
     {
         <div class="view-grid">
             <div class="view-field"><span class="label">Trưởng dự án</span><span>@(Project.ProjectLead?.DisplayName ?? "-")</span></div>
-            <div class="view-field"><span class="label">Trạng thái</span><span class="chip chip-@Project.Status">@StatusLabel(Project.Status)</span></div>
+            <div class="view-field">
+                <span class="label">Trạng thái</span>
+                @if (CanEdit)
+                {
+                    <select class="status-select" value="@Project.Status.ToString()" @onchange="OnStatusChangedAsync">
+                        @if (Project.Status == ProjectStatus.Completed)
+                        {
+                            <option value="@nameof(ProjectStatus.Completed)" disabled>Hoàn thành — chọn trạng thái khác bên dưới để mở lại</option>
+                        }
+                        <option value="@nameof(ProjectStatus.Draft)">Nháp</option>
+                        <option value="@nameof(ProjectStatus.OnTrack)">Đúng tiến độ</option>
+                        <option value="@nameof(ProjectStatus.AtRisk)">Rủi ro</option>
+                        <option value="@nameof(ProjectStatus.Delayed)">Trễ hạn</option>
+                    </select>
+                }
+                else
+                {
+                    <span class="chip chip-@Project.Status">@StatusLabel(Project.Status)</span>
+                }
+            </div>
             <div class="view-field"><span class="label">Công nghệ liên quan</span>
                 <span>
                     @if (Project.ProjectTechnologies.Count == 0)
@@ -67,6 +87,10 @@ else
         @if (CompleteError is not null)
         {
             <div class="error-box">@CompleteError</div>
+        }
+        @if (StatusError is not null)
+        {
+            <div class="error-box">@StatusError</div>
         }
 
         <h2>Thành viên (@Project.Members.Count)</h2>
@@ -237,6 +261,7 @@ else
     private string NewTechName { get; set; } = string.Empty;
     private string? SaveError { get; set; }
     private string? CompleteError { get; set; }
+    private string? StatusError { get; set; }
     private bool IsAdmin { get; set; }
     private bool CanManageDocuments { get; set; }
     private bool IsUploadingDocument { get; set; }
@@ -321,6 +346,41 @@ else
         catch (Exception ex)
         {
             CompleteError = $"Không đánh dấu hoàn thành được: {ex.Message}";
+        }
+    }
+
+    private async Task OnStatusChangedAsync(ChangeEventArgs e)
+    {
+        StatusError = null;
+        if (Project is null || CurrentUserId is null)
+        {
+            return;
+        }
+
+        if (!Enum.TryParse<ProjectStatus>(e.Value?.ToString(), out var newStatus) || newStatus == ProjectStatus.Completed)
+        {
+            return;
+        }
+
+        // Xác thực lại quyền ngay tại lúc đổi, không chỉ tin dropdown chỉ hiện khi CanEdit lúc load
+        // trang — cùng nguyên tắc phòng thủ áp dụng cho các action ghi dữ liệu khác trong dự án.
+        // Đây cũng chính là chỗ chặn "mở lại" dự án Hoàn thành: CanEditProjectAsync chỉ trả về true
+        // cho Admin khi dự án đang Completed, Trưởng dự án bị khóa như các hành động sửa khác.
+        if (!await PermissionService.CanEditProjectAsync(Id, CurrentUserId.Value, IsAdmin))
+        {
+            StatusError = "Bạn không có quyền đổi trạng thái dự án này.";
+            return;
+        }
+
+        try
+        {
+            await StatusService.ChangeStatusAsync(Id, newStatus, CurrentUserId.Value);
+            var authState = await AuthProvider.GetAuthenticationStateAsync();
+            await ReloadAsync(authState.User);
+        }
+        catch (Exception ex)
+        {
+            StatusError = $"Không đổi được trạng thái: {ex.Message}";
         }
     }
 
@@ -520,7 +580,9 @@ else
     private static string StatusLabel(ProjectStatus status) => status switch
     {
         ProjectStatus.Draft => "Nháp",
-        ProjectStatus.InProgress => "Đang triển khai",
+        ProjectStatus.OnTrack => "Đúng tiến độ",
+        ProjectStatus.AtRisk => "Rủi ro",
+        ProjectStatus.Delayed => "Trễ hạn",
         ProjectStatus.Completed => "Hoàn thành",
         _ => status.ToString(),
     };

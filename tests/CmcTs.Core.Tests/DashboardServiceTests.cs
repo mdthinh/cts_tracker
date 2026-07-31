@@ -51,7 +51,7 @@ public class DashboardServiceTests
             db.Projects.Add(new Project
             {
                 Name = "P-InProgress", FiscalYear = "2026-2027", BusinessUnit = BusinessUnit.ITS,
-                Status = ProjectStatus.InProgress, RevenueAmount = 500_000_000m,
+                Status = ProjectStatus.OnTrack, RevenueAmount = 500_000_000m,
                 CreatedByUserId = user.Id, CreatedAt = DateTime.UtcNow,
             });
 
@@ -73,7 +73,7 @@ public class DashboardServiceTests
         Assert.Equal(200_000_000m, summary.RevenueCurrentQuarter); // quý hiện tại = Q2
 
         Assert.Equal(4, summary.Projects.Count);
-        Assert.Equal(new ProjectStatusCounts(0, 1, 3), summary.StatusCounts);
+        Assert.Equal(new ProjectStatusCounts(0, 1, 0, 0, 3), summary.StatusCounts);
     }
 
     [Fact]

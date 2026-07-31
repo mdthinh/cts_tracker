@@ -18,7 +18,14 @@ else
 
     @if (ReportableTasks.Count == 0)
     {
-        <p class="hint">Bạn chưa được gán phụ trách công việc nào trong dự án này.</p>
+        @if (Project.Status == ProjectStatus.Completed)
+        {
+            <p class="hint">Dự án đã hoàn thành, liên hệ admin để mở báo cáo.</p>
+        }
+        else
+        {
+            <p class="hint">Bạn chưa được gán phụ trách công việc nào trong dự án này.</p>
+        }
     }
     else
     {

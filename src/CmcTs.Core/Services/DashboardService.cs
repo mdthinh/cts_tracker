@@ -64,7 +64,9 @@ public class DashboardService : IDashboardService
 
         summary.StatusCounts = new ProjectStatusCounts(
             allProjects.Count(p => p.Status == ProjectStatus.Draft),
-            allProjects.Count(p => p.Status == ProjectStatus.InProgress),
+            allProjects.Count(p => p.Status == ProjectStatus.OnTrack),
+            allProjects.Count(p => p.Status == ProjectStatus.AtRisk),
+            allProjects.Count(p => p.Status == ProjectStatus.Delayed),
             allProjects.Count(p => p.Status == ProjectStatus.Completed));
 
         summary.Projects = allProjects

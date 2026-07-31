@@ -1,5 +1,5 @@
 .hint {
-    color: #6B6459;
+    color: #544C42;
     font-size: 13.5px;
 }
 
@@ -28,7 +28,7 @@
 
 .card-sub {
     font-size: 12px;
-    color: #6B6459;
+    color: #544C42;
     margin-top: 2px;
 }
 
@@ -51,26 +51,34 @@
 }
 
 .kpi {
+    --kpi-accent: #1F3A5F;
     background: #fff;
     border: 1px solid #DBD7CC;
+    border-top: 3px solid var(--kpi-accent);
     border-radius: 10px;
     padding: 14px 16px;
     box-shadow: 0 1px 2px rgba(22, 33, 43, 0.06), 0 6px 20px -12px rgba(22, 33, 43, 0.18);
 }
 
+.kpi-manday { --kpi-accent: #1F3A5F; }
+.kpi-revenue-quarter { --kpi-accent: #2E7D4F; }
+.kpi-revenue-fy { --kpi-accent: #0F6E5C; }
+.kpi-active { --kpi-accent: #B8792B; }
+
 .kpi .label {
-    font-size: 11px;
+    font-size: 11.5px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #6B6459;
+    font-weight: 700;
+    color: var(--kpi-accent);
 }
 
 .kpi .value {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-variant-numeric: tabular-nums;
-    font-size: 22px;
+    font-size: 24px;
     font-weight: 700;
-    margin-top: 6px;
+    margin-top: 7px;
     color: #16212B;
 }
 
@@ -78,13 +86,13 @@
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
     font-size: 12px;
     font-weight: 500;
-    color: #6B6459;
+    color: #544C42;
     margin-left: 4px;
 }
 
 .kpi .foot {
     font-size: 12px;
-    color: #6B6459;
+    color: #544C42;
     margin-top: 6px;
 }
 
@@ -102,7 +110,9 @@
 }
 
 .dot-draft { background: #6B6459; }
-.dot-inprogress { background: #1F3A5F; }
+.dot-ontrack { background: #1F3A5F; }
+.dot-atrisk { background: #B8792B; }
+.dot-delayed { background: #AE3B35; }
 .dot-completed { background: #2E7D4F; }
 
 /* ---------- Row: chart + ring ---------- */
@@ -143,7 +153,7 @@
 
 .axis-label {
     font-size: 10.5px;
-    fill: #6B6459;
+    fill: #544C42;
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -185,13 +195,13 @@
 
 .ring-s {
     font-size: 10px;
-    color: #6B6459;
+    color: #544C42;
 }
 
 .ring-stats {
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    gap: 7px;
     font-size: 13px;
 }
 
@@ -216,7 +226,7 @@
     font-size: 11.5px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #6B6459;
+    color: #544C42;
     padding: 0 10px 8px;
     border-bottom: 1px solid #DBD7CC;
 }
@@ -286,12 +296,22 @@
 
 .chip-Draft {
     background: #ECEAE2;
-    color: #6B6459;
+    color: #544C42;
 }
 
-.chip-InProgress {
+.chip-OnTrack {
     background: #E4EAF1;
     color: #1F3A5F;
+}
+
+.chip-AtRisk {
+    background: #FBEBD2;
+    color: #92600F;
+}
+
+.chip-Delayed {
+    background: #F5E1DF;
+    color: #AE3B35;
 }
 
 .chip-Completed {
@@ -311,7 +331,7 @@
     font-size: 11.5px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: #6B6459;
+    color: #544C42;
     padding: 0 10px 8px;
     border-bottom: 1px solid #DBD7CC;
 }
@@ -334,6 +354,6 @@
 }
 
 .report-table .note {
-    color: #6B6459;
+    color: #544C42;
     max-width: 320px;
 }

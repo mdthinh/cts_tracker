@@ -63,7 +63,9 @@ else
     private static string StatusLabel(ProjectStatus status) => status switch
     {
         ProjectStatus.Draft => "Nháp",
-        ProjectStatus.InProgress => "Đang triển khai",
+        ProjectStatus.OnTrack => "Đúng tiến độ",
+        ProjectStatus.AtRisk => "Rủi ro",
+        ProjectStatus.Delayed => "Trễ hạn",
         ProjectStatus.Completed => "Hoàn thành",
         _ => status.ToString(),
     };
