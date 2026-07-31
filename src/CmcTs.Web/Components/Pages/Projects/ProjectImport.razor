@@ -14,6 +14,10 @@
 {
     <p>Đang tải...</p>
 }
+else if (!CanView)
+{
+    <p class="hint">Bạn không có quyền xem dự án này — chỉ thành viên của dự án hoặc Admin mới xem được.</p>
+}
 else if (!CanImport)
 {
     <p class="hint">Bạn không có quyền upload Dự toán cho dự án này.</p>
@@ -43,19 +47,21 @@ else
         </p>
 
         <h3>Chi phí tổng hợp</h3>
-        <table class="summary-table">
-            <thead><tr><th>Hạng mục</th><th class="num">Số tiền</th><th>Doanh thu?</th></tr></thead>
-            <tbody>
-                @foreach (var c in Parsed.CostSummaries)
-                {
-                    <tr>
-                        <td>@c.Category</td>
-                        <td class="num">@c.Amount.ToString("N0")</td>
-                        <td>@(c.IsRevenueSource ? "Doanh thu dự án" : "-")</td>
-                    </tr>
-                }
-            </tbody>
-        </table>
+        <div class="table-scroll">
+            <table class="summary-table">
+                <thead><tr><th>Hạng mục</th><th class="num">Số tiền</th><th>Doanh thu?</th></tr></thead>
+                <tbody>
+                    @foreach (var c in Parsed.CostSummaries)
+                    {
+                        <tr>
+                            <td>@c.Category</td>
+                            <td class="num">@c.Amount.ToString("N0")</td>
+                            <td>@(c.IsRevenueSource ? "Doanh thu dự án" : "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
 
         @if (Parsed.Warnings.Count > 0)
         {
@@ -71,46 +77,48 @@ else
         }
 
         <h3>Cây công việc (@FlatRows.Count(r => r.Level == 3) task cuối)</h3>
-        <table class="tree-table">
-            <thead>
-                <tr>
-                    <th>Cấp</th>
-                    <th>Tên công việc</th>
-                    <th class="num">Manday</th>
-                    <th class="num">Chi phí</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var row in FlatRows)
-                {
-                    <tr class="level-@row.Level">
-                        <td>
-                            <select @bind="row.Level" @bind:after="Recalculate">
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                            </select>
-                        </td>
-                        <td style="padding-left:@((row.Level - 1) * 18)px">
-                            <input type="text" @bind="row.Name" />
-                        </td>
-                        <td class="num">
-                            @if (row.Level == 3 && !row.IsPackage)
-                            {
-                                <input type="number" step="0.5" @bind="row.MandayPlan" @bind:after="Recalculate" />
-                            }
-                            else
-                            {
-                                @row.MandayPlan.ToString("N1")
-                            }
-                        </td>
-                        <td class="num">@row.CostPlan.ToString("N0")</td>
-                        <td><button type="button" @onclick="() => RemoveRow(row)">Xóa</button></td>
+        <div class="table-scroll">
+            <table class="tree-table">
+                <thead>
+                    <tr>
+                        <th>Cấp</th>
+                        <th>Tên công việc</th>
+                        <th class="num">Manday</th>
+                        <th class="num">Chi phí</th>
+                        <th></th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var row in FlatRows)
+                    {
+                        <tr class="level-@row.Level">
+                            <td>
+                                <select @bind="row.Level" @bind:after="Recalculate">
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                </select>
+                            </td>
+                            <td style="padding-left:@((row.Level - 1) * 18)px">
+                                <input type="text" @bind="row.Name" />
+                            </td>
+                            <td class="num">
+                                @if (row.Level == 3 && !row.IsPackage)
+                                {
+                                    <input type="number" step="0.5" @bind="row.MandayPlan" @bind:after="Recalculate" />
+                                }
+                                else
+                                {
+                                    @row.MandayPlan.ToString("N1")
+                                }
+                            </td>
+                            <td class="num">@row.CostPlan.ToString("N0")</td>
+                            <td><button type="button" @onclick="() => RemoveRow(row)">Xóa</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
 
         @if (CommitError is not null)
         {
@@ -130,6 +138,7 @@ else
     [Parameter] public int Id { get; set; }
 
     private Project? Project;
+    private bool CanView;
     private bool CanImport;
     private ParsedEstimateResult? Parsed;
     private List<EditableRow> FlatRows { get; set; } = new();
@@ -152,6 +161,7 @@ else
             return;
         }
 
+        CanView = await PermissionService.CanViewProjectAsync(Id, userId ?? -1, isAdmin);
         CanImport = await PermissionService.CanEditProjectAsync(Id, userId ?? -1, isAdmin);
     }
 

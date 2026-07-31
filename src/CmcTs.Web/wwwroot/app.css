@@ -41,6 +41,12 @@ a, .btn-link {
     max-width: 1100px;
 }
 
+/* Bảng rộng (cây công việc, danh sách dự án/người dùng...) cuộn ngang trong khung riêng thay vì
+   đẩy tràn cả trang khi thu nhỏ trình duyệt/màn hình điện thoại. */
+.table-scroll {
+    overflow-x: auto;
+}
+
 .btn-primary {
     color: #fff;
     background-color: var(--accent);

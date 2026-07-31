@@ -23,8 +23,41 @@
     font-size: 13.5px;
 }
 
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.filter-row input[type="text"], .filter-row select {
+    padding: 7px 10px;
+    border: 1px solid #DBD7CC;
+    border-radius: 7px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.filter-row input[type="text"] {
+    width: 150px;
+}
+
+.btn-clear-filter {
+    background: none;
+    border: none;
+    color: #AE3B35;
+    cursor: pointer;
+    font-size: 12.5px;
+    padding: 7px 4px;
+}
+
+.btn-clear-filter:hover {
+    text-decoration: underline;
+}
+
 .proj-table {
     width: 100%;
+    min-width: 760px;
     border-collapse: collapse;
 }
 

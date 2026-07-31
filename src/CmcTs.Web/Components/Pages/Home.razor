@@ -2,11 +2,16 @@
 @rendermode InteractiveServer
 @inject IDashboardService DashboardService
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject AuthenticationStateProvider AuthProvider
 @inject IJSRuntime JS
 
 <PageTitle>Tổng quan - ITS INF</PageTitle>
 
 <h1>Tổng quan</h1>
+@if (!IsAdmin)
+{
+    <p class="hint">Chỉ hiển thị manday/doanh thu của riêng bạn và các dự án bạn tham gia.</p>
+}
 
 @if (Summary is null)
 {
@@ -108,7 +113,14 @@ else
 
 <div class="card">
     <h2>Lịch sử báo cáo công việc</h2>
-    <p class="hint">Toàn bộ báo cáo công việc từ tất cả dự án, mới nhất trước. Bấm 1 dòng để mở dự án ở tab mới.</p>
+    @if (IsAdmin)
+    {
+        <p class="hint">Toàn bộ báo cáo công việc từ tất cả dự án, mới nhất trước. Bấm 1 dòng để mở dự án ở tab mới.</p>
+    }
+    else
+    {
+        <p class="hint">Báo cáo công việc của các dự án bạn tham gia, mới nhất trước. Bấm 1 dòng để mở dự án ở tab mới.</p>
+    }
 
     @if (Reports.Count == 0)
     {
@@ -161,6 +173,8 @@ else
     private DashboardSummary? Summary;
     private List<WorkReport> Reports { get; set; } = new();
     private bool IsTruncated;
+    private bool IsAdmin;
+    private int? CurrentUserId;
 
     private int AverageProgress =>
         Summary is null || Summary.Projects.Count == 0
@@ -171,12 +185,29 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        Summary = await DashboardService.GetSummaryAsync(DateTime.UtcNow);
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        IsAdmin = authState.User.IsAdmin();
+        CurrentUserId = authState.User.GetUserId();
+
+        // Admin thấy toàn công ty như trước (scopeToUserId: null). Nhân sự thường chỉ thấy manday/
+        // doanh thu/dự án của riêng mình — cùng phạm vi "là Member của dự án" dùng ở trang Dự án và
+        // CanViewProjectAsync, tránh 3 nơi tự định nghĩa 3 kiểu phạm vi khác nhau.
+        var scopeToUserId = IsAdmin ? (int?)null : (CurrentUserId ?? -1);
+        Summary = await DashboardService.GetSummaryAsync(DateTime.UtcNow, scopeToUserId);
 
         await using var db = await DbFactory.CreateDbContextAsync();
-        Reports = await db.WorkReports
+        var reportsQuery = db.WorkReports
             .Include(r => r.ReportedByUser)
             .Include(r => r.Task).ThenInclude(t => t.Project)
+            .AsQueryable();
+
+        if (!IsAdmin)
+        {
+            var userId = CurrentUserId ?? -1;
+            reportsQuery = reportsQuery.Where(r => r.Task.Project.Members.Any(m => m.UserId == userId));
+        }
+
+        Reports = await reportsQuery
             .OrderByDescending(r => r.CreatedAt)
             .Take(MaxRows + 1)
             .ToListAsync();

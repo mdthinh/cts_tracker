@@ -35,6 +35,7 @@
 
 .task-table {
     width: 100%;
+    min-width: 700px;
     max-width: 900px;
     border-collapse: collapse;
     margin-top: 16px;

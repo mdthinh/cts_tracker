@@ -117,6 +117,17 @@ public class TaskPermissionService : ITaskPermissionService
         return editable;
     }
 
+    public async Task<bool> CanViewProjectAsync(int projectId, int userId, bool isGlobalAdmin, CancellationToken ct = default)
+    {
+        if (isGlobalAdmin)
+        {
+            return true;
+        }
+
+        await using var db = await _dbFactory.CreateDbContextAsync(ct);
+        return await db.ProjectMembers.AnyAsync(m => m.ProjectId == projectId && m.UserId == userId, ct);
+    }
+
     // Dự án đã "Hoàn thành" thì khóa sửa với tất cả trừ Admin (đảm bảo doanh thu đã chốt không bị
     // đổi ngầm sau khi ghi nhận vào quý tài chính).
     private static bool IsLockedForNonAdmin(Project project) => project.Status == ProjectStatus.Completed;

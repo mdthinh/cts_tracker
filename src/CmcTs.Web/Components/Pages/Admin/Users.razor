@@ -23,44 +23,46 @@
     <div class="error-box">@DeleteError</div>
 }
 
-<table class="user-table">
-    <thead>
-        <tr>
-            <th>Tên</th>
-            <th>Tài khoản</th>
-            <th>Loại</th>
-            <th>Phòng ban</th>
-            <th>Vai trò</th>
-            <th>Trạng thái</th>
-            <th>Đồng bộ AD gần nhất</th>
-            <th></th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var u in UserList)
-        {
+<div class="table-scroll">
+    <table class="user-table">
+        <thead>
             <tr>
-                <td>@u.DisplayName</td>
-                <td>@u.SamAccountName</td>
-                <td class="muted">@(u.IsLocalAccount ? "Local" : "AD")</td>
-                <td>@u.Department</td>
-                <td>
-                    <select value="@u.GlobalRole.ToString()" @onchange="e => ChangeRoleAsync(u, e.Value!.ToString()!)">
-                        <option value="@nameof(GlobalRole.Viewer)">Viewer</option>
-                        <option value="@nameof(GlobalRole.Admin)">Admin</option>
-                    </select>
-                </td>
-                <td>
-                    <button type="button" class="@(u.IsActive ? "btn-active" : "btn-inactive")" @onclick="() => ToggleActiveAsync(u)">
-                        @(u.IsActive ? "Đang hoạt động" : "Đã vô hiệu hóa")
-                    </button>
-                </td>
-                <td class="muted">@(u.LastSyncedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
-                <td><button type="button" class="btn-delete" @onclick="() => DeleteUserAsync(u)">Xóa</button></td>
+                <th>Tên</th>
+                <th>Tài khoản</th>
+                <th>Loại</th>
+                <th>Phòng ban</th>
+                <th>Vai trò</th>
+                <th>Trạng thái</th>
+                <th>Đồng bộ AD gần nhất</th>
+                <th></th>
             </tr>
-        }
-    </tbody>
-</table>
+        </thead>
+        <tbody>
+            @foreach (var u in UserList)
+            {
+                <tr>
+                    <td>@u.DisplayName</td>
+                    <td>@u.SamAccountName</td>
+                    <td class="muted">@(u.IsLocalAccount ? "Local" : "AD")</td>
+                    <td>@u.Department</td>
+                    <td>
+                        <select value="@u.GlobalRole.ToString()" @onchange="e => ChangeRoleAsync(u, e.Value!.ToString()!)">
+                            <option value="@nameof(GlobalRole.Viewer)">Viewer</option>
+                            <option value="@nameof(GlobalRole.Admin)">Admin</option>
+                        </select>
+                    </td>
+                    <td>
+                        <button type="button" class="@(u.IsActive ? "btn-active" : "btn-inactive")" @onclick="() => ToggleActiveAsync(u)">
+                            @(u.IsActive ? "Đang hoạt động" : "Đã vô hiệu hóa")
+                        </button>
+                    </td>
+                    <td class="muted">@(u.LastSyncedAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</td>
+                    <td><button type="button" class="btn-delete" @onclick="() => DeleteUserAsync(u)">Xóa</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
 
 @code {
     private List<User> UserList { get; set; } = new();

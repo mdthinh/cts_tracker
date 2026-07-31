@@ -15,4 +15,9 @@ public interface ITaskPermissionService
     // cho từng task. Admin/Trưởng dự án -> toàn bộ task; còn lại -> chính task được gán + mọi task
     // con của nó (gán vào nhánh cha thì coi như phụ trách luôn nhánh con bên trong).
     Task<HashSet<int>> GetEditableTaskIdsAsync(int projectId, int userId, bool isGlobalAdmin, CancellationToken ct = default);
+
+    // true nếu user là Admin, hoặc là Members của dự án (Trưởng dự án luôn nằm trong Members nên
+    // không cần điều kiện riêng) — dùng để CHẶN XEM (không chỉ sửa) trang chi tiết/cây công việc/
+    // báo cáo/tài liệu của dự án mà user không tham gia, kể cả khi gõ thẳng URL.
+    Task<bool> CanViewProjectAsync(int projectId, int userId, bool isGlobalAdmin, CancellationToken ct = default);
 }

@@ -39,6 +39,7 @@ builder.Services.AddScoped<IProjectCompletionService, ProjectCompletionService>(
 builder.Services.AddScoped<IProjectStatusService, ProjectStatusService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IProjectDocumentService, ProjectDocumentService>();
+builder.Services.AddScoped<IPersonnelStatsService, PersonnelStatsService>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

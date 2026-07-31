@@ -1,6 +1,7 @@
 @page "/projects"
 @rendermode InteractiveServer
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject AuthenticationStateProvider AuthProvider
 @inject NavigationManager Navigation
 
 <PageTitle>Dự án - ITS INF</PageTitle>
@@ -12,52 +13,163 @@
     </AuthorizeView>
 </div>
 
+@if (!IsAdmin)
+{
+    <p class="hint">Chỉ hiển thị các dự án bạn tham gia.</p>
+}
+
 @if (Projects.Count == 0)
 {
     <p class="hint">Chưa có dự án nào.</p>
 }
 else
 {
-    <table class="proj-table">
-        <thead>
-            <tr>
-                <th>MVV</th>
-                <th>Tên dự án</th>
-                <th>Năm tài chính</th>
-                <th>Khối kinh doanh</th>
-                <th>Trưởng dự án</th>
-                <th>Thành viên</th>
-                <th>Trạng thái</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var p in Projects)
+    <div class="filter-row">
+        <input type="text" placeholder="Lọc MVV..." @bind="FilterMvv" @bind:event="oninput" />
+        <input type="text" placeholder="Lọc tên dự án..." @bind="FilterName" @bind:event="oninput" />
+        <select @bind="FilterFiscalYear">
+            <option value="">-- NTC: Tất cả --</option>
+            @foreach (var fy in FiscalYearOptions)
             {
-                <tr @onclick="() => GoToDetail(p.Id)">
-                    <td class="muted">@(p.CaseCode ?? "-")</td>
-                    <td class="proj-name">@p.Name</td>
-                    <td>@p.FiscalYear</td>
-                    <td>@p.BusinessUnit</td>
-                    <td>@(p.ProjectLead?.DisplayName ?? "-")</td>
-                    <td>@p.Members.Count</td>
-                    <td><span class="chip chip-@p.Status">@StatusLabel(p.Status)</span></td>
-                </tr>
+                <option value="@fy">@fy</option>
             }
-        </tbody>
-    </table>
+        </select>
+        <select @bind="FilterBusinessUnit">
+            <option value="">-- Khối: Tất cả --</option>
+            @foreach (var bu in Enum.GetValues<BusinessUnit>())
+            {
+                <option value="@bu">@bu</option>
+            }
+        </select>
+        <select @bind="FilterProjectLead">
+            <option value="">-- Trưởng dự án: Tất cả --</option>
+            @foreach (var lead in ProjectLeadOptions)
+            {
+                <option value="@lead">@lead</option>
+            }
+        </select>
+        <input type="text" placeholder="Lọc thành viên..." @bind="FilterMember" @bind:event="oninput" />
+        <select @bind="FilterStatus">
+            <option value="">-- Trạng thái: Tất cả --</option>
+            @foreach (var s in Enum.GetValues<ProjectStatus>())
+            {
+                <option value="@s">@StatusLabel(s)</option>
+            }
+        </select>
+        @if (HasActiveFilter)
+        {
+            <button type="button" class="btn-clear-filter" @onclick="ClearFilters">Xóa lọc</button>
+        }
+    </div>
+
+    @if (FilteredProjects.Count == 0)
+    {
+        <p class="hint">Không có dự án nào khớp bộ lọc.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="proj-table">
+                <thead>
+                    <tr>
+                        <th>MVV</th>
+                        <th>Tên dự án</th>
+                        <th>Năm tài chính</th>
+                        <th>Khối kinh doanh</th>
+                        <th>Trưởng dự án</th>
+                        <th>Thành viên</th>
+                        <th>Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in FilteredProjects)
+                    {
+                        <tr @onclick="() => GoToDetail(p.Id)">
+                            <td class="muted">@(p.CaseCode ?? "-")</td>
+                            <td class="proj-name">@p.Name</td>
+                            <td>@p.FiscalYear</td>
+                            <td>@p.BusinessUnit</td>
+                            <td>@(p.ProjectLead?.DisplayName ?? "-")</td>
+                            <td>@p.Members.Count</td>
+                            <td><span class="chip chip-@p.Status">@StatusLabel(p.Status)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
 }
 
 @code {
     private List<Project> Projects { get; set; } = new();
+    private bool IsAdmin { get; set; }
+
+    private string FilterMvv { get; set; } = string.Empty;
+    private string FilterName { get; set; } = string.Empty;
+    private string FilterFiscalYear { get; set; } = string.Empty;
+    private string FilterBusinessUnit { get; set; } = string.Empty;
+    private string FilterProjectLead { get; set; } = string.Empty;
+    private string FilterMember { get; set; } = string.Empty;
+    private string FilterStatus { get; set; } = string.Empty;
+
+    private bool HasActiveFilter =>
+        !string.IsNullOrWhiteSpace(FilterMvv) || !string.IsNullOrWhiteSpace(FilterName) ||
+        !string.IsNullOrWhiteSpace(FilterFiscalYear) || !string.IsNullOrWhiteSpace(FilterBusinessUnit) ||
+        !string.IsNullOrWhiteSpace(FilterProjectLead) || !string.IsNullOrWhiteSpace(FilterMember) ||
+        !string.IsNullOrWhiteSpace(FilterStatus);
+
+    private List<string> FiscalYearOptions =>
+        Projects.Select(p => p.FiscalYear).Distinct().OrderByDescending(x => x).ToList();
+
+    private List<string> ProjectLeadOptions =>
+        Projects.Select(p => p.ProjectLead?.DisplayName)
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Select(n => n!)
+            .Distinct()
+            .OrderBy(n => n)
+            .ToList();
+
+    private List<Project> FilteredProjects => Projects.Where(p =>
+        (string.IsNullOrWhiteSpace(FilterMvv) || (p.CaseCode ?? string.Empty).Contains(FilterMvv, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(FilterName) || p.Name.Contains(FilterName, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(FilterFiscalYear) || p.FiscalYear == FilterFiscalYear) &&
+        (string.IsNullOrWhiteSpace(FilterBusinessUnit) || p.BusinessUnit.ToString() == FilterBusinessUnit) &&
+        (string.IsNullOrWhiteSpace(FilterProjectLead) || p.ProjectLead?.DisplayName == FilterProjectLead) &&
+        (string.IsNullOrWhiteSpace(FilterMember) || p.Members.Any(m => m.User.DisplayName.Contains(FilterMember, StringComparison.OrdinalIgnoreCase))) &&
+        (string.IsNullOrWhiteSpace(FilterStatus) || p.Status.ToString() == FilterStatus))
+        .ToList();
+
+    private void ClearFilters()
+    {
+        FilterMvv = string.Empty;
+        FilterName = string.Empty;
+        FilterFiscalYear = string.Empty;
+        FilterBusinessUnit = string.Empty;
+        FilterProjectLead = string.Empty;
+        FilterMember = string.Empty;
+        FilterStatus = string.Empty;
+    }
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthProvider.GetAuthenticationStateAsync();
+        IsAdmin = authState.User.IsAdmin();
+        var currentUserId = authState.User.GetUserId() ?? -1;
+
         await using var db = await DbFactory.CreateDbContextAsync();
-        Projects = await db.Projects
+        var query = db.Projects
             .Include(p => p.ProjectLead)
-            .Include(p => p.Members)
-            .OrderByDescending(p => p.CreatedAt)
-            .ToListAsync();
+            .Include(p => p.Members).ThenInclude(m => m.User)
+            .AsQueryable();
+
+        // Nhân sự thường chỉ thấy đúng dự án mình tham gia (là thành viên) — Trưởng dự án luôn
+        // nằm trong Members nên không cần điều kiện riêng. Admin thấy toàn bộ như trước.
+        if (!IsAdmin)
+        {
+            query = query.Where(p => p.Members.Any(m => m.UserId == currentUserId));
+        }
+
+        Projects = await query.OrderByDescending(p => p.CreatedAt).ToListAsync();
     }
 
     private void GoToDetail(int id) => Navigation.NavigateTo($"/projects/{id}");

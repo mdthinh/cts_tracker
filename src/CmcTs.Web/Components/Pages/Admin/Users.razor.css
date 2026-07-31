@@ -6,6 +6,7 @@
 
 .user-table {
     width: 100%;
+    min-width: 760px;
     border-collapse: collapse;
     margin-top: 20px;
 }

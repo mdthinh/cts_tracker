@@ -9,7 +9,14 @@
 
 @if (Project is null)
 {
-    <p>Đang tải...</p>
+    @if (Forbidden)
+    {
+        <p class="hint">Bạn không có quyền xem dự án này — chỉ thành viên của dự án hoặc Admin mới xem được.</p>
+    }
+    else
+    {
+        <p>Đang tải...</p>
+    }
 }
 else
 {
@@ -116,6 +123,7 @@ else
     [Parameter] public int Id { get; set; }
 
     private Project? Project;
+    private bool Forbidden;
     private List<TaskItem> ReportableTasks { get; set; } = new();
     private List<WorkReport> RecentReports { get; set; } = new();
     private int? CurrentUserId;
@@ -141,6 +149,13 @@ else
 
     private async Task LoadAsync()
     {
+        if (!await PermissionService.CanViewProjectAsync(Id, CurrentUserId ?? -1, IsAdmin))
+        {
+            Project = null;
+            Forbidden = true;
+            return;
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync();
         Project = await db.Projects.FindAsync(Id);
         if (Project is null)

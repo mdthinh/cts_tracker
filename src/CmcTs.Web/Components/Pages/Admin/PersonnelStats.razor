@@ -1,0 +1,117 @@
+@page "/admin/personnel-stats"
+@attribute [Authorize(Roles = nameof(GlobalRole.Admin))]
+@rendermode InteractiveServer
+@inject IPersonnelStatsService StatsService
+
+<PageTitle>Thống kê nhân sự - ITS INF</PageTitle>
+
+<h1>Thống kê nhân sự</h1>
+<p class="hint">
+    Manday tính theo ngày báo cáo công việc thực tế của từng người, không phụ thuộc dự án đã hoàn
+    thành hay chưa. Doanh thu là số <strong>ước tính</strong>, quy đổi theo tỷ trọng manday mỗi
+    người đã báo cáo trên từng dự án đã "Đánh dấu hoàn thành", dồn vào quý ghi nhận doanh thu của
+    dự án đó — không phải số chốt riêng cho từng cá nhân.
+</p>
+
+@if (Stats.Count == 0)
+{
+    <p class="hint">Chưa có dữ liệu báo cáo công việc nào.</p>
+}
+else
+{
+    <div class="filter-row">
+        <select @bind="FilterUserId">
+            <option value="">-- Nhân sự: Tất cả --</option>
+            @foreach (var u in PersonOptions)
+            {
+                <option value="@u.UserId">@u.DisplayName</option>
+            }
+        </select>
+        <select @bind="FilterFiscalYear">
+            <option value="">-- NTC: Tất cả --</option>
+            @foreach (var fy in FiscalYearOptions)
+            {
+                <option value="@fy">@fy</option>
+            }
+        </select>
+        <select @bind="FilterQuarter">
+            <option value="">-- Quý: Tất cả --</option>
+            @foreach (var q in new[] { 1, 2, 3, 4 })
+            {
+                <option value="@q">Q@(q)</option>
+            }
+        </select>
+        @if (HasActiveFilter)
+        {
+            <button type="button" class="btn-clear-filter" @onclick="ClearFilters">Xóa lọc</button>
+        }
+    </div>
+
+    <div class="table-scroll">
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>Nhân sự</th>
+                    <th>NTC</th>
+                    <th>Quý</th>
+                    <th class="num">Manday</th>
+                    <th class="num">Doanh thu ước tính</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in FilteredStats)
+                {
+                    <tr>
+                        <td>@s.DisplayName</td>
+                        <td>@s.FiscalYearLabel</td>
+                        <td>Q@(s.Quarter)</td>
+                        <td class="num">@s.Manday.ToString("N1")</td>
+                        <td class="num">@s.Revenue.ToString("N0") đ</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3">Tổng (theo bộ lọc hiện tại)</td>
+                    <td class="num">@FilteredStats.Sum(s => s.Manday).ToString("N1")</td>
+                    <td class="num">@FilteredStats.Sum(s => s.Revenue).ToString("N0") đ</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+}
+
+@code {
+    private List<PersonnelQuarterStat> Stats { get; set; } = new();
+
+    private string FilterUserId { get; set; } = string.Empty;
+    private string FilterFiscalYear { get; set; } = string.Empty;
+    private string FilterQuarter { get; set; } = string.Empty;
+
+    private bool HasActiveFilter =>
+        !string.IsNullOrWhiteSpace(FilterUserId) || !string.IsNullOrWhiteSpace(FilterFiscalYear) || !string.IsNullOrWhiteSpace(FilterQuarter);
+
+    private List<(int UserId, string DisplayName)> PersonOptions =>
+        Stats.Select(s => (s.UserId, s.DisplayName)).Distinct().OrderBy(p => p.DisplayName).ToList();
+
+    private List<string> FiscalYearOptions =>
+        Stats.Select(s => s.FiscalYearLabel).Distinct().OrderByDescending(fy => fy).ToList();
+
+    private List<PersonnelQuarterStat> FilteredStats => Stats.Where(s =>
+        (string.IsNullOrWhiteSpace(FilterUserId) || s.UserId.ToString() == FilterUserId) &&
+        (string.IsNullOrWhiteSpace(FilterFiscalYear) || s.FiscalYearLabel == FilterFiscalYear) &&
+        (string.IsNullOrWhiteSpace(FilterQuarter) || s.Quarter.ToString() == FilterQuarter))
+        .ToList();
+
+    private void ClearFilters()
+    {
+        FilterUserId = string.Empty;
+        FilterFiscalYear = string.Empty;
+        FilterQuarter = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Stats = await StatsService.GetAllAsync();
+    }
+}

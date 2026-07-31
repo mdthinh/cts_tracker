@@ -2,6 +2,8 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
     margin-bottom: 20px;
 }
 
@@ -48,6 +50,22 @@
     gap: 16px;
     margin-bottom: 24px;
     max-width: 800px;
+}
+
+@media (max-width: 700px) {
+    .view-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .field-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 460px) {
+    .view-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .view-field {

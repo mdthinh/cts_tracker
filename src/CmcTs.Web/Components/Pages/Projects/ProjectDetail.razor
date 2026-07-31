@@ -15,7 +15,14 @@
 
 @if (Project is null)
 {
-    <p>Đang tải...</p>
+    @if (Forbidden)
+    {
+        <p class="hint">Bạn không có quyền xem dự án này — chỉ thành viên của dự án hoặc Admin mới xem được.</p>
+    }
+    else
+    {
+        <p>Đang tải...</p>
+    }
 }
 else
 {
@@ -255,6 +262,7 @@ else
 
     private Project? Project { get; set; }
     private List<Technology> Technologies { get; set; } = new();
+    private bool Forbidden { get; set; }
     private bool CanEdit { get; set; }
     private bool EditMode { get; set; }
     private int? CurrentUserId { get; set; }
@@ -295,6 +303,15 @@ else
 
     private async Task ReloadAsync(System.Security.Claims.ClaimsPrincipal user)
     {
+        // Chặn xem (không chỉ chặn sửa) ngay từ đầu — chỉ Admin hoặc thành viên dự án mới load
+        // được dữ liệu, kể cả khi gõ thẳng URL /projects/{id} của 1 dự án không tham gia.
+        if (!await PermissionService.CanViewProjectAsync(Id, CurrentUserId ?? -1, IsAdmin))
+        {
+            Project = null;
+            Forbidden = true;
+            return;
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync();
         Project = await db.Projects
             .Include(p => p.ProjectLead)

@@ -172,4 +172,36 @@ public class TaskPermissionServiceTests
         Assert.True(await service.CanEditProjectAsync(projectId, otherUserId, isGlobalAdmin: true));
         Assert.True(await service.CanEditTaskAsync(level1Id, otherUserId, isGlobalAdmin: true));
     }
+
+    [Fact]
+    public async Task CanViewProject_TrueForMember_FalseForNonMember_TrueForAdminRegardless()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var factory = new TestDbContextFactory(dbName);
+        int projectId, memberUserId, nonMemberUserId;
+
+        using (var db = factory.CreateDbContext())
+        {
+            var member = new User { SamAccountName = "member", DisplayName = "Member", CreatedAt = DateTime.UtcNow };
+            var nonMember = new User { SamAccountName = "nonmember", DisplayName = "NonMember", CreatedAt = DateTime.UtcNow };
+            db.Users.AddRange(member, nonMember);
+            db.SaveChanges();
+            memberUserId = member.Id;
+            nonMemberUserId = nonMember.Id;
+
+            var project = new Project { Name = "Test", FiscalYear = "2026-2027", BusinessUnit = BusinessUnit.ENT, CreatedByUserId = member.Id, CreatedAt = DateTime.UtcNow };
+            db.Projects.Add(project);
+            db.SaveChanges();
+            projectId = project.Id;
+
+            db.ProjectMembers.Add(new ProjectMember { ProjectId = projectId, UserId = memberUserId, AddedAt = DateTime.UtcNow });
+            db.SaveChanges();
+        }
+
+        var service = new TaskPermissionService(factory);
+
+        Assert.True(await service.CanViewProjectAsync(projectId, memberUserId, isGlobalAdmin: false));
+        Assert.False(await service.CanViewProjectAsync(projectId, nonMemberUserId, isGlobalAdmin: false));
+        Assert.True(await service.CanViewProjectAsync(projectId, nonMemberUserId, isGlobalAdmin: true));
+    }
 }

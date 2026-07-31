@@ -48,6 +48,12 @@
     gap: 12px;
 }
 
+@media (max-width: 500px) {
+    .field-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 .field label {
     display: block;
     font-size: 12.5px;

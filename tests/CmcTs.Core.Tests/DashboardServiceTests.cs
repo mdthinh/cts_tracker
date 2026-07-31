@@ -58,7 +58,7 @@ public class DashboardServiceTests
             db.SaveChanges();
         }
 
-        var service = new DashboardService(factory);
+        var service = new DashboardService(factory, new PersonnelStatsService(factory));
         var summary = await service.GetSummaryAsync(AsOf);
 
         Assert.Equal(2, summary.CurrentQuarter);
@@ -102,9 +102,70 @@ public class DashboardServiceTests
             db.SaveChanges();
         }
 
-        var service = new DashboardService(factory);
+        var service = new DashboardService(factory, new PersonnelStatsService(factory));
         var summary = await service.GetSummaryAsync(AsOf);
 
         Assert.Equal(3m, summary.MandayThisFiscalYear);
+    }
+
+    [Fact]
+    public async Task GetSummaryAsync_ScopedToUser_OnlyShowsThatUsersProjectsMandayAndRevenue()
+    {
+        var factory = new TestDbContextFactory(Guid.NewGuid().ToString());
+        int memberUserId, otherUserId;
+
+        using (var db = factory.CreateDbContext())
+        {
+            var member = new User { SamAccountName = "member", DisplayName = "Member", CreatedAt = DateTime.UtcNow };
+            var other = new User { SamAccountName = "other", DisplayName = "Other", CreatedAt = DateTime.UtcNow };
+            db.Users.AddRange(member, other);
+            db.SaveChanges();
+            memberUserId = member.Id;
+            otherUserId = other.Id;
+
+            // Dự án member tham gia (là Member) và có báo cáo — hoàn thành trong quý hiện tại (Q2).
+            var ownProject = new Project
+            {
+                Name = "Own", FiscalYear = "2026-2027", BusinessUnit = BusinessUnit.ENT,
+                Status = ProjectStatus.Completed, RevenueAmount = 100_000_000m,
+                CompletedAt = new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
+                CreatedByUserId = memberUserId, CreatedAt = DateTime.UtcNow,
+            };
+            ownProject.Members.Add(new ProjectMember { UserId = memberUserId, AddedAt = DateTime.UtcNow });
+            db.Projects.Add(ownProject);
+            db.SaveChanges();
+
+            var ownTask = new TaskItem { ProjectId = ownProject.Id, Level = TaskLevel.Level3, Name = "T", SourceRow = 1 };
+            db.Tasks.Add(ownTask);
+            db.SaveChanges();
+            db.WorkReports.Add(new WorkReport { TaskId = ownTask.Id, ReportedByUserId = memberUserId, ReportDate = new DateOnly(2026, 6, 1), ProgressPercent = 100, MandayReported = 4m, CreatedAt = DateTime.UtcNow });
+
+            // Dự án khác member KHÔNG tham gia, doanh thu lớn hơn nhiều — không được lọt vào scope cá nhân.
+            var otherProject = new Project
+            {
+                Name = "Other", FiscalYear = "2026-2027", BusinessUnit = BusinessUnit.GOV,
+                Status = ProjectStatus.Completed, RevenueAmount = 900_000_000m,
+                CompletedAt = new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc),
+                CreatedByUserId = otherUserId, CreatedAt = DateTime.UtcNow,
+            };
+            otherProject.Members.Add(new ProjectMember { UserId = otherUserId, AddedAt = DateTime.UtcNow });
+            db.Projects.Add(otherProject);
+            db.SaveChanges();
+
+            var otherTask = new TaskItem { ProjectId = otherProject.Id, Level = TaskLevel.Level3, Name = "T2", SourceRow = 1 };
+            db.Tasks.Add(otherTask);
+            db.SaveChanges();
+            db.WorkReports.Add(new WorkReport { TaskId = otherTask.Id, ReportedByUserId = otherUserId, ReportDate = new DateOnly(2026, 6, 1), ProgressPercent = 100, MandayReported = 9m, CreatedAt = DateTime.UtcNow });
+
+            db.SaveChanges();
+        }
+
+        var service = new DashboardService(factory, new PersonnelStatsService(factory));
+        var summary = await service.GetSummaryAsync(AsOf, scopeToUserId: memberUserId);
+
+        Assert.Equal(4m, summary.MandayThisFiscalYear); // chỉ manday của member, không cộng 9m của other
+        Assert.Equal(100_000_000m, summary.RevenueThisFiscalYear); // chỉ doanh thu quy đổi từ dự án member tham gia
+        Assert.Single(summary.Projects); // chỉ 1 dự án (Own) — không thấy "Other"
+        Assert.Equal("Own", summary.Projects.Single().Name);
     }
 }
