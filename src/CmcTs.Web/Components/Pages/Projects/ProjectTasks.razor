@@ -104,6 +104,15 @@ else
 
     private async Task OnAssigneeChangedAsync((TaskItem Task, int? NewAssigneeUserId) change)
     {
+        // Xác thực lại quyền ngay tại lúc lưu thay vì chỉ tin vào việc dropdown chỉ hiển thị khi
+        // CanAssign (EditableTaskIds tính từ lúc load trang) — phòng quyền đã đổi giữa lúc mở trang
+        // và lúc đổi người phụ trách.
+        var editableIds = await PermissionService.GetEditableTaskIdsAsync(Id, CurrentUserId ?? -1, IsAdmin);
+        if (!editableIds.Contains(change.Task.Id))
+        {
+            return;
+        }
+
         await using var db = await DbFactory.CreateDbContextAsync();
         var entity = await db.Tasks.FindAsync(change.Task.Id);
         if (entity is null)

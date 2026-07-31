@@ -270,6 +270,15 @@ else
                 return;
             }
 
+            // Xác thực lại quyền ngay tại lúc lưu, không chỉ tin vào CanImport đã kiểm tra lúc load
+            // trang — phòng trường hợp quyền/trạng thái khóa dự án đã đổi trong lúc đang chỉnh sửa
+            // Preview (upload + sửa tay có thể mất vài phút).
+            if (!await PermissionService.CanEditProjectAsync(Id, userId.Value, authState.User.IsAdmin()))
+            {
+                CommitError = "Bạn không có quyền import Dự toán cho dự án này (có thể dự án vừa bị đánh dấu hoàn thành).";
+                return;
+            }
+
             var tree = TaskTreeBuilder.Build(FlatRows.Select(ToNode).ToList());
 
             using var saveStream = new MemoryStream(_fileBytes);

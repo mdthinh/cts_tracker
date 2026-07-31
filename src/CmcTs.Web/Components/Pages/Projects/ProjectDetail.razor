@@ -4,6 +4,8 @@
 @inject IUserProvisioningService Provisioning
 @inject ITaskPermissionService PermissionService
 @inject IProjectCompletionService CompletionService
+@inject IProjectDocumentService DocumentService
+@inject IFileStorageService Storage
 @inject AuthenticationStateProvider AuthProvider
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
@@ -97,6 +99,39 @@ else
                 <div class="view-field"><span class="label">Số task cuối</span><span>@TaskCount</span></div>
             </div>
             <a class="btn-secondary" href="/projects/@Id/tasks">Xem cây công việc</a>
+        }
+
+        <h2>Tài liệu final (@Project.Documents.Count)</h2>
+        @if (Project.Documents.Count == 0)
+        {
+            <p class="hint">Chưa có tài liệu nào được đính kèm.</p>
+        }
+        else
+        {
+            <ul class="document-list">
+                @foreach (var d in Project.Documents.OrderByDescending(d => d.UploadedAt))
+                {
+                    <li>
+                        <a href="/documents/@d.Id/download">@d.FileName</a>
+                        <span class="muted">@d.UploadedByUser.DisplayName &middot; @d.UploadedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</span>
+                    </li>
+                }
+            </ul>
+        }
+        @if (CanManageDocuments)
+        {
+            <div class="field document-upload">
+                <label>Upload tài liệu final mới</label>
+                <InputFile OnChange="OnDocumentSelectedAsync" disabled="@IsUploadingDocument" />
+                @if (IsUploadingDocument)
+                {
+                    <p class="hint">Đang upload...</p>
+                }
+                @if (DocumentError is not null)
+                {
+                    <div class="error-box">@DocumentError</div>
+                }
+            </div>
         }
     }
     else
@@ -203,6 +238,9 @@ else
     private string? SaveError { get; set; }
     private string? CompleteError { get; set; }
     private bool IsAdmin { get; set; }
+    private bool CanManageDocuments { get; set; }
+    private bool IsUploadingDocument { get; set; }
+    private string? DocumentError { get; set; }
 
     private string CompletedQuarterLabel =>
         Project?.CompletedAt is { } completedAt
@@ -229,6 +267,7 @@ else
             .Include(p => p.CompletedByUser)
             .Include(p => p.Members).ThenInclude(m => m.User)
             .Include(p => p.ProjectTechnologies).ThenInclude(pt => pt.Technology)
+            .Include(p => p.Documents).ThenInclude(d => d.UploadedByUser)
             .SingleOrDefaultAsync(p => p.Id == Id);
 
         if (Project is null)
@@ -242,6 +281,11 @@ else
         // khóa dự án hoàn thành mà không cần sửa gì thêm.
         CanEdit = await PermissionService.CanEditProjectAsync(Id, CurrentUserId ?? -1, IsAdmin);
         TaskCount = await db.Tasks.CountAsync(t => t.ProjectId == Id && t.Level == TaskLevel.Level3);
+
+        // Cố ý KHÔNG dùng CanEdit/CanEditProjectAsync ở đây: tài liệu nghiệm thu/hoàn công thường
+        // được đính kèm đúng lúc hoặc sau khi dự án Hoàn thành, nên không áp luật khóa sửa theo
+        // Project.Status như các trường dữ liệu ảnh hưởng doanh thu khác.
+        CanManageDocuments = IsAdmin || (CurrentUserId is not null && Project.ProjectLeadUserId == CurrentUserId);
     }
 
     private async Task CompleteProjectAsync()
@@ -249,6 +293,14 @@ else
         CompleteError = null;
         if (Project is null || CurrentUserId is null)
         {
+            return;
+        }
+
+        // Xác thực lại quyền ngay tại lúc bấm, không chỉ tin nút chỉ hiển thị khi CanEdit lúc load
+        // trang — cùng nguyên tắc phòng thủ áp dụng cho các action ghi dữ liệu khác trong dự án.
+        if (!await PermissionService.CanEditProjectAsync(Id, CurrentUserId.Value, IsAdmin))
+        {
+            CompleteError = "Bạn không có quyền đánh dấu hoàn thành dự án này.";
             return;
         }
 
@@ -269,6 +321,39 @@ else
         catch (Exception ex)
         {
             CompleteError = $"Không đánh dấu hoàn thành được: {ex.Message}";
+        }
+    }
+
+    private async Task OnDocumentSelectedAsync(InputFileChangeEventArgs e)
+    {
+        DocumentError = null;
+
+        // Xác thực lại quyền ngay tại lúc upload thay vì chỉ tin việc ẩn/hiện nút ở giao diện lúc
+        // load trang — cùng nguyên tắc phòng thủ đã áp dụng cho gửi báo cáo công việc.
+        if (!CanManageDocuments || CurrentUserId is null)
+        {
+            DocumentError = "Bạn không có quyền upload tài liệu cho dự án này.";
+            return;
+        }
+
+        IsUploadingDocument = true;
+        try
+        {
+            var file = e.File;
+            await using var stream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            var savedPath = await Storage.SaveAsync($"projects/{Id}/documents", file.Name, stream);
+            await DocumentService.AddAsync(Id, file.Name, savedPath, CurrentUserId.Value);
+
+            var authState = await AuthProvider.GetAuthenticationStateAsync();
+            await ReloadAsync(authState.User);
+        }
+        catch (Exception ex)
+        {
+            DocumentError = $"Không upload được tài liệu: {ex.Message}";
+        }
+        finally
+        {
+            IsUploadingDocument = false;
         }
     }
 
@@ -360,6 +445,14 @@ else
         if (CurrentUserId is null)
         {
             SaveError = "Không xác định được người dùng hiện tại, vui lòng đăng nhập lại.";
+            return;
+        }
+
+        // Xác thực lại quyền ngay tại lúc lưu, không chỉ tin vào việc nút "Chỉnh sửa" đã bị ẩn lúc
+        // load trang — phòng trường hợp quyền/trạng thái khóa dự án đã đổi trong lúc đang sửa form.
+        if (!await PermissionService.CanEditProjectAsync(Id, CurrentUserId.Value, IsAdmin))
+        {
+            SaveError = "Bạn không có quyền sửa dự án này (có thể dự án vừa bị đánh dấu hoàn thành).";
             return;
         }
 
