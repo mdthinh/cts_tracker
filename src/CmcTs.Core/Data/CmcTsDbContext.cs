@@ -41,6 +41,7 @@ public class CmcTsDbContext : DbContext
         modelBuilder.Entity<Project>(e =>
         {
             e.Property(p => p.Name).HasMaxLength(300);
+            e.Property(p => p.CaseCode).HasMaxLength(50);
             e.Property(p => p.FiscalYear).HasMaxLength(20);
             e.Property(p => p.RevenueAmount).HasPrecision(18, 2);
 

@@ -21,7 +21,7 @@ else
 {
     <div class="page-head">
         <div>
-            <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
+            <div class="eyebrow">MVV @(Project.CaseCode ?? "-") &middot; @Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
             <h1>@Project.Name</h1>
         </div>
         <div class="head-actions">
@@ -39,6 +39,7 @@ else
     @if (!EditMode)
     {
         <div class="view-grid">
+            <div class="view-field"><span class="label">Mã vụ việc (MVV)</span><span>@(Project.CaseCode ?? "-")</span></div>
             <div class="view-field"><span class="label">Trưởng dự án</span><span>@(Project.ProjectLead?.DisplayName ?? "-")</span></div>
             <div class="view-field">
                 <span class="label">Trạng thái</span>
@@ -167,9 +168,16 @@ else
 
         <div class="field-row">
             <div class="field">
+                <label for="mvv">Mã vụ việc (MVV)</label>
+                <input id="mvv" type="text" @bind="EditCaseCode" />
+            </div>
+            <div class="field">
                 <label for="fy">Năm tài chính</label>
                 <input id="fy" type="text" @bind="EditFiscalYear" />
             </div>
+        </div>
+
+        <div class="field-row">
             <div class="field">
                 <label for="bu">Khối kinh doanh</label>
                 <select id="bu" @bind="EditBusinessUnit">
@@ -253,6 +261,7 @@ else
     private int TaskCount { get; set; }
 
     private string EditName { get; set; } = string.Empty;
+    private string EditCaseCode { get; set; } = string.Empty;
     private string EditFiscalYear { get; set; } = string.Empty;
     private BusinessUnit EditBusinessUnit { get; set; }
     private HashSet<int> EditTechnologyIds { get; set; } = new();
@@ -422,6 +431,7 @@ else
         if (Project is null) return;
 
         EditName = Project.Name;
+        EditCaseCode = Project.CaseCode ?? string.Empty;
         EditFiscalYear = Project.FiscalYear;
         EditBusinessUnit = Project.BusinessUnit;
         EditTechnologyIds = Project.ProjectTechnologies.Select(pt => pt.TechnologyId).ToHashSet();
@@ -492,6 +502,11 @@ else
             SaveError = "Vui lòng nhập tên dự án.";
             return;
         }
+        if (string.IsNullOrWhiteSpace(EditCaseCode))
+        {
+            SaveError = "Vui lòng nhập mã vụ việc (MVV).";
+            return;
+        }
         if (EditMembers.Count == 0)
         {
             SaveError = "Dự án cần ít nhất 1 thành viên.";
@@ -525,11 +540,13 @@ else
         var newLeadId = int.Parse(EditProjectLeadUserId);
 
         LogIfChanged(db, entity.Name, EditName.Trim(), "Name");
+        LogIfChanged(db, entity.CaseCode, EditCaseCode.Trim(), "CaseCode");
         LogIfChanged(db, entity.FiscalYear, EditFiscalYear.Trim(), "FiscalYear");
         LogIfChanged(db, entity.BusinessUnit.ToString(), EditBusinessUnit.ToString(), "BusinessUnit");
         LogIfChanged(db, entity.ProjectLeadUserId?.ToString(), newLeadId.ToString(), "ProjectLeadUserId");
 
         entity.Name = EditName.Trim();
+        entity.CaseCode = EditCaseCode.Trim();
         entity.FiscalYear = EditFiscalYear.Trim();
         entity.BusinessUnit = EditBusinessUnit;
         entity.ProjectLeadUserId = newLeadId;

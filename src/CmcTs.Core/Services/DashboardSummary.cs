@@ -14,6 +14,7 @@ public record QuarterRevenue(int Quarter, decimal Amount);
 public record DashboardProjectRow(
     int ProjectId,
     string Name,
+    string? CaseCode,
     string FiscalYear,
     BusinessUnit BusinessUnit,
     string? ProjectLeadName,

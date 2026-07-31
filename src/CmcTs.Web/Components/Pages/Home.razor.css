@@ -257,6 +257,11 @@
     font-weight: 600;
 }
 
+.muted {
+    color: #544C42;
+    font-size: 12.5px;
+}
+
 .bar-row {
     display: flex;
     align-items: center;

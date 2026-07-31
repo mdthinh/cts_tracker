@@ -5,6 +5,10 @@ public class Project
     public int Id { get; set; }
     public string Name { get; set; } = null!;
 
+    // Mã vụ việc (MVV) — mã nội bộ tra cứu/đối chiếu dự án với các hệ thống khác. Nullable vì các
+    // dự án tạo trước khi có trường này chưa có giá trị; bắt buộc nhập ở form tạo dự án mới.
+    public string? CaseCode { get; set; }
+
     // Định dạng "2026-2027" — năm tài chính 1/4 -> 31/3 năm sau.
     public string FiscalYear { get; set; } = null!;
     public BusinessUnit BusinessUnit { get; set; }

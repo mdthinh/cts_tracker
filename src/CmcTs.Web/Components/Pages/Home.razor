@@ -71,6 +71,7 @@ else
             <table class="proj-table">
                 <thead>
                     <tr>
+                        <th>MVV</th>
                         <th>Dự án</th>
                         <th>NTC</th>
                         <th>Khối</th>
@@ -84,6 +85,7 @@ else
                     @foreach (var p in Summary.Projects)
                     {
                         <tr @onclick="() => GoToProject(p.ProjectId)">
+                            <td class="muted">@(p.CaseCode ?? "-")</td>
                             <td class="proj-name">@p.Name</td>
                             <td>@p.FiscalYear</td>
                             <td>@p.BusinessUnit</td>
@@ -133,7 +135,7 @@ else
                         <tr @onclick="() => OpenProjectInNewTabAsync(r.Task.ProjectId)">
                             <td class="nowrap">@r.ReportDate.ToString("dd/MM/yyyy")</td>
                             <td class="nowrap">@r.ReportedByUser.DisplayName</td>
-                            <td>@r.Task.Project.Name</td>
+                            <td>@r.Task.Project.Name<br /><span class="muted">MVV @(r.Task.Project.CaseCode ?? "-")</span></td>
                             <td>@r.Task.Name</td>
                             <td class="num">@r.ProgressPercent%</td>
                             <td class="num">@r.MandayReported.ToString("N1")</td>

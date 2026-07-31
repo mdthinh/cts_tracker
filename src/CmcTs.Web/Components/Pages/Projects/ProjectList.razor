@@ -21,6 +21,7 @@ else
     <table class="proj-table">
         <thead>
             <tr>
+                <th>MVV</th>
                 <th>Tên dự án</th>
                 <th>Năm tài chính</th>
                 <th>Khối kinh doanh</th>
@@ -33,6 +34,7 @@ else
             @foreach (var p in Projects)
             {
                 <tr @onclick="() => GoToDetail(p.Id)">
+                    <td class="muted">@(p.CaseCode ?? "-")</td>
                     <td class="proj-name">@p.Name</td>
                     <td>@p.FiscalYear</td>
                     <td>@p.BusinessUnit</td>

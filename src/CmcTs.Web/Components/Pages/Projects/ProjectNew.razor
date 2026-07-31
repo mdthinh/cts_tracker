@@ -20,9 +20,16 @@
 
     <div class="field-row">
         <div class="field">
+            <label for="mvv">Mã vụ việc (MVV)</label>
+            <InputText id="mvv" @bind-Value="Form.CaseCode" placeholder="VD: MVV-2026-0123" />
+        </div>
+        <div class="field">
             <label for="fy">Năm tài chính</label>
             <InputText id="fy" @bind-Value="Form.FiscalYear" />
         </div>
+    </div>
+
+    <div class="field-row">
         <div class="field">
             <label for="bu">Khối kinh doanh</label>
             <InputSelect id="bu" @bind-Value="Form.BusinessUnit">
@@ -168,6 +175,7 @@
         var project = new Project
         {
             Name = Form.Name.Trim(),
+            CaseCode = Form.CaseCode.Trim(),
             FiscalYear = Form.FiscalYear.Trim(),
             BusinessUnit = Form.BusinessUnit,
             ProjectLeadUserId = int.Parse(Form.ProjectLeadUserId),
@@ -195,6 +203,9 @@
     {
         [Required]
         public string Name { get; set; } = string.Empty;
+
+        [Required]
+        public string CaseCode { get; set; } = string.Empty;
 
         [Required]
         public string FiscalYear { get; set; } = string.Empty;

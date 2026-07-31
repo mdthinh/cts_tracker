@@ -13,7 +13,7 @@
 }
 else
 {
-    <div class="eyebrow">@Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
+    <div class="eyebrow">MVV @(Project.CaseCode ?? "-") &middot; @Project.BusinessUnit &middot; NTC @Project.FiscalYear</div>
     <h1>Báo cáo công việc — @Project.Name</h1>
 
     @if (ReportableTasks.Count == 0)

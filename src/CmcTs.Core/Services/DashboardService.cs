@@ -93,7 +93,7 @@ public class DashboardService : IDashboardService
                 : 0;
 
         return new DashboardProjectRow(
-            p.Id, p.Name, p.FiscalYear, p.BusinessUnit,
+            p.Id, p.Name, p.CaseCode, p.FiscalYear, p.BusinessUnit,
             p.ProjectLead?.DisplayName, p.Status, progress, totalActual, totalPlan);
     }
 }
