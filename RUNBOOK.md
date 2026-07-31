@@ -121,8 +121,15 @@ Chạy 1 lần khi cài mới, và mỗi khi pull về có migration mới (thư
 ```powershell
 cd C:\Apps\CmcTs
 dotnet tool install --global dotnet-ef   # chỉ cần làm 1 lần trên máy chưa có
-dotnet ef database update --project src/CmcTs.Core --startup-project src/CmcTs.Web
+dotnet ef database update --project src\CmcTs.Core --startup-project src\CmcTs.Core
 ```
+
+Dùng `CmcTs.Core` làm cả `--project` lẫn `--startup-project` — **không dùng `CmcTs.Web`**, vì gói
+`Microsoft.EntityFrameworkCore.Design` chỉ được khai báo (với `PrivateAssets=all`) trong
+`CmcTs.Core` nên không chảy sang `CmcTs.Web` qua project reference; dùng `CmcTs.Web` làm startup
+project sẽ báo lỗi "doesn't reference Microsoft.EntityFrameworkCore.Design". `CmcTs.Core` tự đủ để
+chạy migration vì đã có sẵn `CmcTsDbContextFactory.cs` (design-time factory riêng, connection
+string hardcode `localhost\SQLEXPRESS`, không đọc `appsettings.json` của `CmcTs.Web`).
 
 Lệnh này tạo database `CmcTsTracker` nếu chưa có, và áp toàn bộ migration. Không cần tạo DB thủ
 công trước bằng SSMS.
@@ -148,8 +155,8 @@ lại (hoặc đăng xuất khỏi VM) sẽ dừng app.
 ```powershell
 cd C:\Apps\CmcTs
 git pull
-cd src/CmcTs.Web
-dotnet ef database update --project ../CmcTs.Core --startup-project .   # nếu có migration mới
+dotnet ef database update --project src\CmcTs.Core --startup-project src\CmcTs.Core   # nếu có migration mới
+cd src\CmcTs.Web
 dotnet run --urls "http://0.0.0.0:5000"
 ```
 
@@ -196,7 +203,7 @@ Set theo mục 1.5 Cách 2 (biến hệ thống) rồi `iisreset` để IIS đ�
 ```powershell
 cd C:\Apps\CmcTs
 git pull
-dotnet ef database update --project src/CmcTs.Core --startup-project src/CmcTs.Web   # nếu có migration mới
+dotnet ef database update --project src\CmcTs.Core --startup-project src\CmcTs.Core   # nếu có migration mới
 dotnet publish src/CmcTs.Web -c Release -o C:\Apps\CmcTs-publish
 ```
 
@@ -209,7 +216,9 @@ không cần thao tác thêm, nhưng có thể chủ động `iisreset` nếu mu
 
 | Triệu chứng | Nguyên nhân | Cách sửa |
 |---|---|---|
-| `dotnet ef database update` báo lỗi không kết nối được SQL Server | Thiếu `\SQLEXPRESS` trong connection string (chỉ có `Server=localhost`) | Sửa thành `Server=tcp:localhost\SQLEXPRESS;...` ở cả `appsettings.json` và (nếu chạy `dotnet ef` trực tiếp) `CmcTsDbContextFactory.cs` |
+| `dotnet ef database update` báo "No project was found" | Đứng ở thư mục gốc repo, không có file `.csproj` ở đó | Thêm `--project src\CmcTs.Core --startup-project src\CmcTs.Core`, hoặc `cd` vào đúng `src\CmcTs.Core` rồi chạy không cần cờ |
+| `dotnet ef database update` báo "startup project doesn't reference Microsoft.EntityFrameworkCore.Design" | Dùng `--startup-project src\CmcTs.Web` — gói Design chỉ khai báo (PrivateAssets=all) trong `CmcTs.Core`, không chảy sang `CmcTs.Web` | Dùng `CmcTs.Core` làm cả `--project` lẫn `--startup-project`, không dùng `CmcTs.Web` |
+| `dotnet ef database update` báo lỗi không kết nối được SQL Server | Thiếu `\SQLEXPRESS` trong connection string (chỉ có `Server=localhost`) | Sửa thành `Server=tcp:localhost\SQLEXPRESS;...` ở cả `appsettings.json` và `CmcTsDbContextFactory.cs` (file này dùng riêng cho `dotnet ef`) |
 | Kết nối SQL Server chập chờn / không tìm thấy instance | Dịch vụ **SQL Server Browser** đang Stopped | `services.msc` → SQL Server Browser → Start + Automatic |
 | Kết nối SQL Server bị từ chối dù đã đúng tên instance | Giao thức **Named Pipes/TCP** bị Disabled trong SQL Server Configuration Manager | Bật lại, restart dịch vụ SQL Server (SQLEXPRESS) |
 | `dotnet user-secrets set` báo "could not find UserSecretsId" | Thiếu thẻ `<UserSecretsId>` trong `.csproj`, hoặc chạy lệnh sai thư mục | Đảm bảo đứng trong `src/CmcTs.Web`; project đã có sẵn `<UserSecretsId>` từ trước |
