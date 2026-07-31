@@ -3,17 +3,50 @@
     font-size: 13.5px;
 }
 
+/* ---------- Shared card ---------- */
+.card {
+    background: #fff;
+    border: 1px solid #DBD7CC;
+    border-radius: 10px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 2px rgba(22, 33, 43, 0.06), 0 6px 20px -12px rgba(22, 33, 43, 0.18);
+    margin-bottom: 16px;
+}
+
+.card h2 {
+    font-size: 15.5px;
+    margin: 0;
+}
+
+.card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.card-sub {
+    font-size: 12px;
+    color: #6B6459;
+    margin-top: 2px;
+}
+
 /* ---------- KPI ---------- */
 .kpi-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
-    margin: 16px 0 8px;
+    margin: 16px 0;
 }
 
 @media (max-width: 900px) {
     .kpi-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+
+    .row-2col {
+        grid-template-columns: 1fr !important;
     }
 }
 
@@ -22,6 +55,7 @@
     border: 1px solid #DBD7CC;
     border-radius: 10px;
     padding: 14px 16px;
+    box-shadow: 0 1px 2px rgba(22, 33, 43, 0.06), 0 6px 20px -12px rgba(22, 33, 43, 0.18);
 }
 
 .kpi .label {
@@ -48,12 +82,15 @@
     margin-left: 4px;
 }
 
-.status-counts {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 8px;
-    font-size: 12.5px;
+.kpi .foot {
+    font-size: 12px;
+    color: #6B6459;
+    margin-top: 6px;
+}
+
+.kpi .foot b {
+    color: #16212B;
+    font-weight: 600;
 }
 
 .dot {
@@ -68,19 +105,19 @@
 .dot-inprogress { background: #1F3A5F; }
 .dot-completed { background: #2E7D4F; }
 
-/* ---------- Chart ---------- */
-.chart-card {
-    background: #fff;
-    border: 1px solid #DBD7CC;
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 8px;
+/* ---------- Row: chart + ring ---------- */
+.row-2col {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 16px;
+    align-items: stretch;
 }
 
-.chart-card svg {
+.chart-svg {
     width: 100%;
     height: 190px;
     display: block;
+    margin-top: 8px;
 }
 
 .axis-line {
@@ -110,7 +147,64 @@
     font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/* ---------- Completion ring ---------- */
+.ring-wrap {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-top: 16px;
+}
+
+.ring {
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: conic-gradient(#1F3A5F calc(var(--pct) * 1%), #ECEAE2 0);
+}
+
+.ring .hole {
+    width: 82px;
+    height: 82px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.ring-n {
+    font-size: 21px;
+    font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.ring-s {
+    font-size: 10px;
+    color: #6B6459;
+}
+
+.ring-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    font-size: 13px;
+}
+
+.ring-stats b {
+    font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Projects table ---------- */
+.table-scroll {
+    overflow-x: auto;
+    margin-top: 12px;
+}
+
 .proj-table {
     width: 100%;
     min-width: 820px;
@@ -133,11 +227,13 @@
     font-size: 13.5px;
 }
 
-.proj-table tbody tr {
+.proj-table tbody tr,
+.report-table tbody tr {
     cursor: pointer;
 }
 
-.proj-table tbody tr:hover {
+.proj-table tbody tr:hover,
+.report-table tbody tr:hover {
     background: #F5F4EF;
 }
 
@@ -203,11 +299,7 @@
     color: #2E7D4F;
 }
 
-.table-scroll {
-    overflow-x: auto;
-    margin-top: 12px;
-}
-
+/* ---------- Report history table ---------- */
 .report-table {
     width: 100%;
     min-width: 800px;

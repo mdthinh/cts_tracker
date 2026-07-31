@@ -2,6 +2,7 @@
 @rendermode InteractiveServer
 @inject IDashboardService DashboardService
 @inject IDbContextFactory<CmcTsDbContext> DbFactory
+@inject IJSRuntime JS
 
 <PageTitle>Tổng quan - ITS INF</PageTitle>
 
@@ -27,105 +28,126 @@ else
             <div class="value">@Summary.RevenueThisFiscalYear.ToString("N0")<span class="unit">đ</span></div>
         </div>
         <div class="kpi">
-            <div class="label">Dự án theo trạng thái</div>
-            <div class="status-counts">
-                <span><i class="dot dot-draft"></i>Nháp: @Summary.StatusCounts.Draft</span>
-                <span><i class="dot dot-inprogress"></i>Đang chạy: @Summary.StatusCounts.InProgress</span>
-                <span><i class="dot dot-completed"></i>Hoàn thành: @Summary.StatusCounts.Completed</span>
+            <div class="label">Dự án đang triển khai</div>
+            <div class="value">@Summary.StatusCounts.InProgress<span class="unit">dự án</span></div>
+            <div class="foot">Nháp: <b>@Summary.StatusCounts.Draft</b> &middot; Hoàn thành: <b>@Summary.StatusCounts.Completed</b></div>
+        </div>
+    </div>
+
+    <div class="row-2col">
+        <div class="card">
+            <div class="card-head">
+                <div>
+                    <h2>Doanh thu theo quý</h2>
+                    <div class="card-sub">NTC @Summary.FiscalYearLabel &middot; đơn vị: đồng</div>
+                </div>
+            </div>
+            <p class="hint">Chỉ tính dự án đã bấm "Đánh dấu hoàn thành", ghi nhận vào quý chứa ngày hoàn thành.</p>
+            <svg class="chart-svg" viewBox="0 0 560 190" preserveAspectRatio="xMidYMid meet">
+                <line class="axis-line" x1="8" y1="162" x2="552" y2="162" />
+                @BuildChartBars(Summary)
+            </svg>
+        </div>
+
+        <div class="card">
+            <h2>Mức độ hoàn thành</h2>
+            <div class="card-sub">Trung bình toàn bộ dự án, theo trọng số manday</div>
+            <div class="ring-wrap">
+                <div class="ring" style="--pct:@AverageProgress"><div class="hole"><span class="ring-n">@AverageProgress%</span><span class="ring-s">hoàn thành</span></div></div>
+                <div class="ring-stats">
+                    <div><span class="dot dot-draft"></span>Nháp: <b>@Summary.StatusCounts.Draft</b></div>
+                    <div><span class="dot dot-inprogress"></span>Đang triển khai: <b>@Summary.StatusCounts.InProgress</b></div>
+                    <div><span class="dot dot-completed"></span>Hoàn thành: <b>@Summary.StatusCounts.Completed</b></div>
+                </div>
             </div>
         </div>
     </div>
 
-    <h2>Doanh thu theo quý — NTC @Summary.FiscalYearLabel</h2>
-    <p class="hint">Chỉ tính dự án đã bấm "Đánh dấu hoàn thành", ghi nhận vào quý chứa ngày hoàn thành.</p>
-    <div class="chart-card">
-        <svg viewBox="0 0 560 190" preserveAspectRatio="xMidYMid meet">
-            <line class="axis-line" x1="8" y1="162" x2="552" y2="162" />
-            @BuildChartBars(Summary)
-        </svg>
-    </div>
-
-    <h2>Dự án (@Summary.Projects.Count)</h2>
-    <div class="table-scroll">
-        <table class="proj-table">
-            <thead>
-                <tr>
-                    <th>Dự án</th>
-                    <th>NTC</th>
-                    <th>Khối</th>
-                    <th>Trưởng dự án</th>
-                    <th>Tiến độ</th>
-                    <th class="num">Manday (TT/KH)</th>
-                    <th>Trạng thái</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var p in Summary.Projects)
-                {
-                    <tr @onclick="() => GoToProject(p.ProjectId)">
-                        <td class="proj-name">@p.Name</td>
-                        <td>@p.FiscalYear</td>
-                        <td>@p.BusinessUnit</td>
-                        <td>@(p.ProjectLeadName ?? "-")</td>
-                        <td>
-                            <div class="bar-row">
-                                <div class="bar-track"><div class="bar-fill" style="width:@(p.Progress)%"></div></div>
-                                <span class="bar-pct">@(p.Progress)%</span>
-                            </div>
-                        </td>
-                        <td class="num">@p.MandayActual.ToString("N1") / @p.MandayPlan.ToString("N1")</td>
-                        <td><span class="chip chip-@p.Status">@StatusLabel(p.Status)</span></td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-}
-
-<h2>Lịch sử báo cáo công việc</h2>
-<p class="hint">Toàn bộ báo cáo công việc từ tất cả dự án, mới nhất trước.</p>
-
-@if (Reports.Count == 0)
-{
-    <p class="hint">Chưa có báo cáo công việc nào.</p>
-}
-else
-{
-    <div class="table-scroll">
-        <table class="report-table">
-            <thead>
-                <tr>
-                    <th>Ngày báo cáo</th>
-                    <th>Người báo cáo</th>
-                    <th>Dự án</th>
-                    <th>Công việc</th>
-                    <th class="num">Tiến độ</th>
-                    <th class="num">Manday</th>
-                    <th>Ghi chú</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var r in Reports)
-                {
+    <div class="card">
+        <h2>Dự án (@Summary.Projects.Count)</h2>
+        <div class="table-scroll">
+            <table class="proj-table">
+                <thead>
                     <tr>
-                        <td class="nowrap">@r.ReportDate.ToString("dd/MM/yyyy")</td>
-                        <td class="nowrap">@r.ReportedByUser.DisplayName</td>
-                        <td>@r.Task.Project.Name</td>
-                        <td>@r.Task.Name</td>
-                        <td class="num">@r.ProgressPercent%</td>
-                        <td class="num">@r.MandayReported.ToString("N1")</td>
-                        <td class="note">@r.Note</td>
+                        <th>Dự án</th>
+                        <th>NTC</th>
+                        <th>Khối</th>
+                        <th>Trưởng dự án</th>
+                        <th>Tiến độ</th>
+                        <th class="num">Manday (TT/KH)</th>
+                        <th>Trạng thái</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var p in Summary.Projects)
+                    {
+                        <tr @onclick="() => GoToProject(p.ProjectId)">
+                            <td class="proj-name">@p.Name</td>
+                            <td>@p.FiscalYear</td>
+                            <td>@p.BusinessUnit</td>
+                            <td>@(p.ProjectLeadName ?? "-")</td>
+                            <td>
+                                <div class="bar-row">
+                                    <div class="bar-track"><div class="bar-fill" style="width:@(p.Progress)%"></div></div>
+                                    <span class="bar-pct">@(p.Progress)%</span>
+                                </div>
+                            </td>
+                            <td class="num">@p.MandayActual.ToString("N1") / @p.MandayPlan.ToString("N1")</td>
+                            <td><span class="chip chip-@p.Status">@StatusLabel(p.Status)</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     </div>
-
-    @if (IsTruncated)
-    {
-        <p class="hint">Chỉ hiển thị @Reports.Count báo cáo gần nhất.</p>
-    }
 }
+
+<div class="card">
+    <h2>Lịch sử báo cáo công việc</h2>
+    <p class="hint">Toàn bộ báo cáo công việc từ tất cả dự án, mới nhất trước. Bấm 1 dòng để mở dự án ở tab mới.</p>
+
+    @if (Reports.Count == 0)
+    {
+        <p class="hint">Chưa có báo cáo công việc nào.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th>Ngày báo cáo</th>
+                        <th>Người báo cáo</th>
+                        <th>Dự án</th>
+                        <th>Công việc</th>
+                        <th class="num">Tiến độ</th>
+                        <th class="num">Manday</th>
+                        <th>Ghi chú</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in Reports)
+                    {
+                        <tr @onclick="() => OpenProjectInNewTabAsync(r.Task.ProjectId)">
+                            <td class="nowrap">@r.ReportDate.ToString("dd/MM/yyyy")</td>
+                            <td class="nowrap">@r.ReportedByUser.DisplayName</td>
+                            <td>@r.Task.Project.Name</td>
+                            <td>@r.Task.Name</td>
+                            <td class="num">@r.ProgressPercent%</td>
+                            <td class="num">@r.MandayReported.ToString("N1")</td>
+                            <td class="note">@r.Note</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (IsTruncated)
+        {
+            <p class="hint">Chỉ hiển thị @Reports.Count báo cáo gần nhất.</p>
+        }
+    }
+</div>
 
 @code {
     private const int MaxRows = 200;
@@ -135,6 +157,13 @@ else
     private DashboardSummary? Summary;
     private List<WorkReport> Reports { get; set; } = new();
     private bool IsTruncated;
+
+    private int AverageProgress =>
+        Summary is null || Summary.Projects.Count == 0
+            ? 0
+            : Summary.Projects.Sum(p => p.MandayPlan) > 0
+                ? (int)Math.Round(Summary.Projects.Sum(p => p.Progress * p.MandayPlan) / Summary.Projects.Sum(p => p.MandayPlan))
+                : (int)Math.Round(Summary.Projects.Average(p => (decimal)p.Progress));
 
     protected override async Task OnInitializedAsync()
     {
@@ -156,6 +185,12 @@ else
     }
 
     private void GoToProject(int projectId) => Navigation.NavigateTo($"/projects/{projectId}");
+
+    private async Task OpenProjectInNewTabAsync(int projectId)
+    {
+        var absoluteUrl = Navigation.ToAbsoluteUri($"/projects/{projectId}").ToString();
+        await JS.InvokeVoidAsync("open", absoluteUrl, "_blank");
+    }
 
     // Dựng phần bar+label bằng chuỗi rồi render qua MarkupString thay vì viết trực tiếp thẻ SVG
     // <text> trong Razor — Razor coi <text>/</text> là cú pháp riêng của nó (không nhận attribute)
